@@ -1,0 +1,11 @@
+{
+  "name": "otc-tournament-market",
+  "version": "1.0.0",
+  "description": "Mercado de opciones sobre resultados de torneos deportivos",
+  "scripts": {
+    "dev": "npx serve . -p 3000 --no-clipboard",
+    "start": "npx serve . -p 3000 --no-clipboard"
+  },
+  "keywords": ["trading", "options", "tournament", "market"],
+  "license": "MIT"
+}
