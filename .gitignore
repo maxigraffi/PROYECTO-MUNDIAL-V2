@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Variables de entorno (nunca subir claves secretas)
+.env
+.env.local
+.env.*.local
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Backup del archivo original (opcional — podés borrarlo si querés)
+# OTC_Tournament_Market.html
