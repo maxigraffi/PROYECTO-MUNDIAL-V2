@@ -9,6 +9,43 @@
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">OTC<em>/</em>OPTIONS</div>
+    <div class="login-sub">Tournament Market</div>
+
+    <div class="login-tabs">
+      <button id="ltab-in" class="login-tab active" onclick="switchLoginTab('in')">Iniciar sesión</button>
+      <button id="ltab-up" class="login-tab"        onclick="switchLoginTab('up')">Crear cuenta</button>
+    </div>
+
+    <div id="lf-name" class="form-row" style="display:none;">
+      <label>Nombre completo</label>
+      <input type="text" id="l-name" placeholder="Ej: Maximiliano García" autocomplete="name">
+    </div>
+    <div class="form-row">
+      <label>Email</label>
+      <input type="email" id="l-email" placeholder="tu@email.com" autocomplete="email">
+    </div>
+    <div class="form-row">
+      <label>Contraseña</label>
+      <input type="password" id="l-pass" placeholder="••••••••" autocomplete="current-password">
+    </div>
+
+    <div id="l-error" class="login-error"></div>
+
+    <button class="btn btn-primary" id="l-submit" onclick="handleAuth()" style="width:100%;padding:9px;font-size:12px;">
+      Ingresar
+    </button>
+
+    <div class="login-hint" id="l-hint">
+      ¿Primera vez? Usá <strong style="color:var(--text2);">Crear cuenta</strong> para registrarte.<br>
+      El primer usuario en registrarse será administrador.
+    </div>
+  </div>
+</div>
+
 <!-- LOADING OVERLAY -->
 <div id="loading-overlay">
   <div class="loader-logo">OTC/OPTIONS</div>
@@ -25,10 +62,11 @@
   <div class="topbar-right">
     <span class="status-dot" id="sdot"></span>
     <span id="slabel" style="font-family:var(--mono);font-size:10px;color:var(--text2);">ABIERTO</span>
-    <div class="user-chip" onclick="showUserPicker()">
-      <span>👤</span><span id="cur-user-lbl">—</span><span style="color:var(--text3)">▾</span>
+    <div class="user-chip" style="cursor:default;">
+      <span>👤</span><span id="cur-user-lbl">—</span>
     </div>
     <button class="icon-btn" onclick="toggleTheme()">◑</button>
+    <button class="icon-btn" onclick="handleLogout()" title="Cerrar sesión">⏻</button>
   </div>
 </div>
 
@@ -363,13 +401,6 @@
   </div>
 </div>
 
-<!-- USER PICKER MODAL -->
-<div class="modal-ov" id="user-modal">
-  <div class="modal" style="width:300px;">
-    <div class="modal-hd"><span class="modal-title">Seleccionar Usuario</span><button class="modal-x" onclick="closeUserModal()">×</button></div>
-    <div class="modal-body" id="user-picker-body"></div>
-  </div>
-</div>
 
 <div id="toast-ct"></div>
 

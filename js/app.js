@@ -24,6 +24,7 @@ const S = {
   settings:    { minQty: 1, maxQty: 5 },
   gameState:   'open',
   currentUser: localStorage.getItem('otc_user') || null,
+  isAdmin:     false,
 };
 
 /* ═══════════════════════════════
@@ -941,25 +942,120 @@ async function resetGame() {
 }
 
 /* ═══════════════════════════════
-   USER PICKER
+   AUTENTICACIÓN
 ═══════════════════════════════ */
-function showUserPicker() {
-  document.getElementById('user-picker-body').innerHTML = S.users.map(u =>
-    `<button class="btn btn-outline" style="width:100%;justify-content:flex-start;margin-bottom:6px;${u.id === S.currentUser ? 'border-color:var(--accent);color:var(--accent);' : ''}" onclick="selectUser('${u.id}')">
-      👤 ${u.name} <span style="font-family:var(--mono);font-size:10px;color:var(--text3);margin-left:auto;">${u.id}</span>
-    </button>`
-  ).join('') + `<div class="sep"></div><p style="font-size:10px;color:var(--text3);">El admin puede agregar jugadores desde el panel Admin → Usuarios.</p>`;
-  document.getElementById('user-modal').classList.add('open');
+let _loginTab = 'in';
+
+function showLoginScreen() { document.getElementById('login-screen').classList.remove('hidden'); }
+function hideLoginScreen() { document.getElementById('login-screen').classList.add('hidden'); }
+
+function switchLoginTab(tab) {
+  _loginTab = tab;
+  document.getElementById('ltab-in').classList.toggle('active', tab === 'in');
+  document.getElementById('ltab-up').classList.toggle('active', tab === 'up');
+  document.getElementById('lf-name').style.display = tab === 'up' ? '' : 'none';
+  document.getElementById('l-submit').textContent   = tab === 'in' ? 'Ingresar' : 'Crear cuenta';
+  document.getElementById('l-hint').style.display   = tab === 'up' ? 'none' : '';
+  _clearLoginError();
 }
-function selectUser(id) {
-  S.currentUser = id;
-  localStorage.setItem('otc_user', id);
-  document.getElementById('cur-user-lbl').textContent = id;
-  closeUserModal();
+function _setLoginError(msg) {
+  const el = document.getElementById('l-error');
+  el.textContent = msg; el.style.display = '';
+}
+function _clearLoginError() { document.getElementById('l-error').style.display = 'none'; }
+
+async function handleAuth() {
+  _clearLoginError();
+  const email = document.getElementById('l-email').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  if (!email || !pass) { _setLoginError('Completá email y contraseña.'); return; }
+  const btn = document.getElementById('l-submit');
+  btn.disabled = true; btn.textContent = 'Cargando...';
+  try {
+    if (_loginTab === 'in') {
+      await _doSignIn(email, pass);
+    } else {
+      const name = document.getElementById('l-name').value.trim();
+      if (!name) { _setLoginError('Ingresá tu nombre.'); return; }
+      await _doSignUp(name, email, pass);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = _loginTab === 'in' ? 'Ingresar' : 'Crear cuenta';
+  }
+}
+
+async function _doSignIn(email, pass) {
+  const { data, error } = await db.auth.signInWithPassword({ email, password: pass });
+  if (error) { _setLoginError('Email o contraseña incorrectos.'); return; }
+  await _afterAuth(data.user);
+}
+
+async function _doSignUp(name, email, pass) {
+  if (S.users.length >= 6) { _setLoginError('El torneo ya tiene 6 jugadores. Contactá al admin.'); return; }
+  const { data, error } = await db.auth.signUp({ email, password: pass });
+  if (error) { _setLoginError(error.message); return; }
+
+  const isFirst  = S.users.length === 0;
+  const playerId = _generateId(name);
+
+  const { error: e2 } = await db.from('players').insert({
+    id: playerId, name, email,
+    auth_user_id: data.user.id,
+    is_admin: isFirst,
+  });
+  if (e2) {
+    await db.auth.signOut();
+    _setLoginError('Error al crear el perfil: ' + e2.message);
+    return;
+  }
+  await loadState();
+  await _afterAuth(data.user);
+}
+
+function _generateId(name) {
+  const base = name.toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+  return base || 'P' + Date.now().toString().slice(-5);
+}
+
+async function _afterAuth(authUser) {
+  const { data: player, error } = await db.from('players')
+    .select('*').eq('auth_user_id', authUser.id).single();
+  if (error || !player) {
+    await db.auth.signOut();
+    _setLoginError('No se encontró tu perfil. Registrate primero.');
+    return;
+  }
+  await loadState();
+  _setCurrentPlayer(player);
+  hideLoginScreen();
   renderAll();
-  toast('Sesión: ' + id, 'inf');
+  renderInicio(); renderTicker(); updateStatus();
+  toast('Bienvenido, ' + player.name + ' 👋', 'ok');
 }
-function closeUserModal() { document.getElementById('user-modal').classList.remove('open'); }
+
+function _setCurrentPlayer(player) {
+  S.currentUser = player.id;
+  S.isAdmin     = player.is_admin || false;
+  localStorage.setItem('otc_user', player.id);
+  document.getElementById('cur-user-lbl').textContent = player.name || player.id;
+  document.querySelectorAll('.admin-tab').forEach(t => {
+    t.style.display = S.isAdmin ? '' : 'none';
+  });
+}
+
+async function handleLogout() {
+  if (!confirm('¿Cerrar sesión?')) return;
+  await db.auth.signOut();
+  S.currentUser = null;
+  S.isAdmin     = false;
+  localStorage.removeItem('otc_user');
+  document.getElementById('cur-user-lbl').textContent = '—';
+  showLoginScreen();
+}
 
 /* ═══════════════════════════════
    TICKER
@@ -1032,6 +1128,10 @@ function emptyRow(cols, msg = 'Sin datos') {
 }
 function renderAll() {
   const active = document.querySelector('.tab.active')?.dataset?.tab;
+  // Mostrar tabs de admin solo al administrador
+  document.querySelectorAll('.admin-tab').forEach(t => {
+    t.style.display = S.isAdmin ? '' : 'none';
+  });
   renderTicker();
   updateStatus();
   if (active === 'inicio')  renderInicio();
@@ -1047,7 +1147,10 @@ function renderAll() {
    KEYBOARD / MODAL CLOSE
 ═══════════════════════════════ */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeUserModal(); }
+  if (e.key === 'Escape') { closeModal(); }
+  if (e.key === 'Enter' && !document.getElementById('login-screen').classList.contains('hidden')) {
+    handleAuth();
+  }
 });
 document.getElementById('order-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('order-modal')) closeModal();
@@ -1064,15 +1167,25 @@ document.getElementById('user-modal').addEventListener('click', e => {
   try {
     await loadState();
     setupRealtime();
-    hideLoading();
-    renderInicio();
-    renderTicker();
-    updateStatus();
-    if (S.currentUser) {
-      document.getElementById('cur-user-lbl').textContent = S.currentUser;
-    } else if (S.users.length > 0) {
-      showUserPicker();
+
+    const { data: { session } } = await db.auth.getSession();
+
+    if (session) {
+      const { data: player } = await db.from('players')
+        .select('*').eq('auth_user_id', session.user.id).single();
+      if (player) {
+        _setCurrentPlayer(player);
+        hideLoading();
+        renderInicio(); renderTicker(); updateStatus();
+        renderAll();
+        return;
+      }
+      // Sesión sin perfil — limpiar
+      await db.auth.signOut();
     }
+
+    hideLoading();
+    showLoginScreen();
   } catch (err) {
     console.error(err);
     document.querySelector('#loading-overlay .loader-msg').textContent =

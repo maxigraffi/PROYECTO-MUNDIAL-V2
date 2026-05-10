@@ -245,3 +245,18 @@ label{font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.05em;tex
 .admin-section-body{background:var(--bg2);max-height:340px;overflow-y:auto;}
 .admin-section.collapsed .admin-section-body{display:none;}
 .admin-section-actions{display:flex;align-items:center;gap:8px;}
+
+/* ── LOGIN SCREEN ── */
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;}
+#login-screen.hidden{display:none;}
+.login-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:36px 32px;width:380px;max-width:95vw;display:flex;flex-direction:column;gap:16px;box-shadow:0 30px 80px rgba(0,0,0,.6);}
+.login-logo{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--accent);letter-spacing:.1em;text-align:center;}
+.login-logo em{color:var(--text3);font-style:normal;font-weight:300;}
+.login-sub{font-size:10px;color:var(--text3);text-align:center;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:-8px;}
+.login-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:4px;}
+.login-tab{flex:1;padding:8px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:none;border:none;color:var(--text3);border-bottom:2px solid transparent;transition:all .15s;font-family:var(--sans);}
+.login-tab:hover{color:var(--text2);}
+.login-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.login-divider{height:1px;background:var(--border);margin:4px 0;}
+.login-error{display:none;color:var(--red);font-size:11px;font-family:var(--mono);background:var(--red-bg);border:1px solid rgba(255,64,96,.2);border-radius:var(--r);padding:8px 10px;}
+.login-hint{font-size:10px;color:var(--text3);font-family:var(--mono);text-align:center;line-height:1.6;}
