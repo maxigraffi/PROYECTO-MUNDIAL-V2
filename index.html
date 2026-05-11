@@ -73,7 +73,7 @@
 <!-- TABS -->
 <div class="tabbar">
   <div class="tab active" data-tab="inicio" onclick="switchTab(this,'inicio')">Inicio</div>
-  <div class="tab" data-tab="market" onclick="switchTab(this,'market')">Mercado</div>
+  <div class="tab" data-tab="market" onclick="switchTab(this,'market')">Mercado de Equipos</div>
   <div class="tab" data-tab="history" onclick="switchTab(this,'history')">Historial</div>
   <div class="tab" data-tab="mypos" onclick="switchTab(this,'mypos')">Mi Posición</div>
   <div class="tab admin-tab" data-tab="admin" onclick="switchTab(this,'admin')">Admin</div>
@@ -154,6 +154,9 @@
 
 <!-- ══════════ MERCADO ══════════ -->
 <div class="view" id="view-market">
+  <div style="background:rgba(61,158,255,0.08);border:1px solid rgba(61,158,255,0.25);border-radius:var(--r);padding:10px 16px;font-family:var(--mono);font-size:12px;color:var(--accent);text-align:center;letter-spacing:.05em;">
+    💰 Los precios están expresados en <strong>MILES DE PESOS</strong>
+  </div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
     <input type="text" id="mkt-search" placeholder="Buscar equipo..." style="width:200px;" oninput="renderMarket()">
     <span style="font-family:var(--mono);font-size:10px;color:var(--text3);" id="mkt-maxprice-lbl"></span>
@@ -193,7 +196,7 @@
     </table></div>
   </div>
   <div class="card" id="hist-orders-panel" style="display:none;">
-    <div class="card-hd"><span class="card-title">Mis Órdenes Vivas</span><span id="hist-orders-count" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span></div>
+    <div class="card-hd"><span class="card-title">Mis Órdenes Vivas</span><span id="hist-orders-count" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span><button class="btn btn-xs btn-red" onclick="cancelAllMyOrders()" style="margin-left:auto;">Cancelar Todas</button></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th class="L">Hora</th><th class="L">Equipo</th><th>Lado</th><th>Precio</th><th>Size Original</th><th>Remanente</th><th></th></tr></thead>
       <tbody id="hist-orders-tbody"></tbody>

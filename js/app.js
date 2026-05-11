@@ -390,6 +390,8 @@ function renderMarket() {
   const disabled = S.gameState === 'closed' ? 'disabled' : '';
   document.getElementById('market-panels').innerHTML = list.map(c => {
     const bb = getBestBid(c.id), ba = getBestAsk(c.id), lt = getLastTrade(c.id), vol = getVolume(c.id);
+    const isMeBid = bb && bb.userId === S.currentUser;
+    const isMeAsk = ba && ba.userId === S.currentUser;
     const bids = S.orders.filter(o => o.countryId === c.id && o.side === 'BUY'  && o.status === 'live' && o.remQty > 0).sort((a,b) => b.price - a.price || a.ts - b.ts);
     const asks = S.orders.filter(o => o.countryId === c.id && o.side === 'SELL' && o.status === 'live' && o.remQty > 0).sort((a,b) => a.price - b.price || a.ts - b.ts);
     const maxDepth = Math.max(1, ...bids.map(x => x.remQty), ...asks.map(x => x.remQty));
@@ -423,8 +425,8 @@ function renderMarket() {
             <input type="number" id="bq-${c.id}" value="1" min="1" max="${S.settings.maxQty}" step="1" style="width:36px;padding:3px 6px;font-size:11px;text-align:center;" ${disabled}>
             <button class="btn btn-sm btn-green" onclick="submitInlineOrder('${c.id}','BUY')" ${disabled}>BID</button>
           </div>
-          <div class="cp-stat"><div class="lbl">Mejor BID</div><div class="val" style="color:var(--green);">${bb ? fmtP(bb.price) : '—'}</div></div>
-          <div class="cp-stat"><div class="lbl">Mejor ASK</div><div class="val" style="color:var(--red);">${ba ? fmtP(ba.price) : '—'}</div></div>
+          <div class="cp-stat"><div class="lbl">Mejor BID${isMeBid ? ' <span style="color:var(--accent);font-size:9px;font-weight:700;">★ TU ORDEN</span>' : ''}</div><div class="val" style="color:var(--green);">${bb ? fmtP(bb.price) : '—'}</div></div>
+          <div class="cp-stat"><div class="lbl">Mejor ASK${isMeAsk ? ' <span style="color:var(--accent);font-size:9px;font-weight:700;">★ TU ORDEN</span>' : ''}</div><div class="val" style="color:var(--red);">${ba ? fmtP(ba.price) : '—'}</div></div>
           <div style="display:flex;gap:3px;align-items:center;">
             <button class="btn btn-sm btn-red" onclick="submitInlineOrder('${c.id}','SELL')" ${disabled}>ASK</button>
             <input type="number" id="aq-${c.id}" value="1" min="1" max="${S.settings.maxQty}" step="1" style="width:36px;padding:3px 6px;font-size:11px;text-align:center;" ${disabled}>
@@ -826,6 +828,14 @@ async function doCancelOrder(id) {
   if (!confirm('¿Cancelar esta orden?')) return;
   await cancelOrder(id);
   toast('Orden cancelada', 'ok');
+  renderAll();
+}
+async function cancelAllMyOrders() {
+  const myOrds = S.orders.filter(o => o.userId === S.currentUser && o.status === 'live' && o.remQty > 0);
+  if (!myOrds.length) { toast('No tenés órdenes vivas', 'err'); return; }
+  if (!confirm(`¿Cancelar todas tus ${myOrds.length} órdenes vivas?`)) return;
+  await Promise.all(myOrds.map(o => cancelOrder(o.id)));
+  toast(`${myOrds.length} órdenes canceladas`, 'ok');
   renderAll();
 }
 function toggleAdminSection(id) {
