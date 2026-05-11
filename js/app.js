@@ -1155,9 +1155,6 @@ document.addEventListener('keydown', e => {
 document.getElementById('order-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('order-modal')) closeModal();
 });
-document.getElementById('user-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('user-modal')) closeUserModal();
-});
 
 /* ═══════════════════════════════
    BOOT
