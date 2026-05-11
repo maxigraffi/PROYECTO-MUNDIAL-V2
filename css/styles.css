@@ -236,8 +236,8 @@ label{font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.05em;tex
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px;}
 
 /* ── COLLAPSIBLE ADMIN SECTIONS ── */
-.admin-section{border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px;background:var(--bg2);}
-.admin-section-hd{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg3);cursor:pointer;user-select:none;}
+.admin-section{border:1px solid var(--border);border-radius:var(--r);overflow:visible;margin-bottom:10px;background:var(--bg2);}
+.admin-section-hd{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--bg3);cursor:pointer;user-select:none;border-radius:var(--r) var(--r) 0 0;}
 .admin-section-hd:hover{background:var(--bg4);}
 .admin-section-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);display:flex;align-items:center;gap:8px;}
 .admin-section-chevron{color:var(--text3);font-size:14px;transition:transform .2s;line-height:1;margin-left:8px;flex-shrink:0;}
