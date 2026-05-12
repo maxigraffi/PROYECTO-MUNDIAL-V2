@@ -105,10 +105,10 @@
       </div>
     </div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start;">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:14px;align-items:start;">
   <div class="card">
     <div class="card-hd"><span class="card-title">Equipos — Precios de Licitación Inicial</span></div>
-    <div class="tbl-wrap" style="max-height:320px;overflow-y:auto;">
+    <div class="tbl-wrap" style="max-height:460px;overflow-y:auto;">
       <table>
         <thead><tr style="position:sticky;top:0;z-index:1;">
           <th class="L">Equipo</th>
@@ -212,8 +212,8 @@
       <span class="card-title" style="color:var(--accent);">📊 Mark To Market — PnL a Precios de Mercado</span>
       <span id="mtm-total-lbl" style="font-family:var(--mono);font-size:13px;font-weight:700;"></span>
     </div>
-    <div class="tbl-wrap"><table>
-      <thead><tr>
+    <div class="tbl-wrap" style="max-height:400px;overflow-y:auto;"><table>
+      <thead><tr style="position:sticky;top:0;z-index:1;">
         <th class="L">Equipo</th>
         <th>Pos. Neta</th>
         <th>Precio Prom. Pagado</th>
@@ -228,8 +228,8 @@
   </div>
   <div class="card">
     <div class="card-hd"><span class="card-title">Posición por Equipo</span></div>
-    <div class="tbl-wrap"><table>
-      <thead><tr>
+    <div class="tbl-wrap" style="max-height:400px;overflow-y:auto;"><table>
+      <thead><tr style="position:sticky;top:0;z-index:1;">
         <th class="L">Equipo</th>
         <th>Contratos Comprados</th><th>Prima Promedio Pagada</th>
         <th>Contratos Vendidos</th><th>Prima Promedio Cobrada</th>
