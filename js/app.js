@@ -73,6 +73,7 @@ async function loadState() {
     id: t.id, name: t.name, flag: t.flag,
     finalPos: t.final_pos || null,
     displayOrder: t.display_order || 0,
+    isHidden: t.is_hidden || false,
   }));
 
   S.auctionPrices = Object.fromEntries(
@@ -385,7 +386,7 @@ function renderMarket() {
   const q  = document.getElementById('mkt-search').value.toLowerCase();
   const mp = maxPrice();
   document.getElementById('mkt-maxprice-lbl').textContent = `Precio máx: ${fmtP(mp)}`;
-  const list = S.countries.filter(c => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q));
+  const list = S.countries.filter(c => !c.isHidden && (c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)));
   document.getElementById('mkt-count').textContent = list.length + ' equipos';
   const disabled = S.gameState === 'closed' ? 'disabled' : '';
   document.getElementById('market-panels').innerHTML = list.map(c => {
@@ -649,13 +650,21 @@ function renderAdmin() {
   document.getElementById('cfg-min').value = S.settings.minQty;
   document.getElementById('cfg-max').value = S.settings.maxQty;
   document.getElementById('admin-c-tbody').innerHTML = S.countries.map((c, i) =>
-    `<tr>
+    `<tr style="${c.isHidden ? 'opacity:0.45;' : ''}">
       <td class="L"><input type="text" id="ac-${i}-flag" value="${c.flag}" style="width:50px;text-align:center;"></td>
-      <td class="L"><input type="text" id="ac-${i}-name" value="${c.name}"></td>
+      <td class="L">
+        <input type="text" id="ac-${i}-name" value="${c.name}">
+        ${c.isHidden ? '<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-left:6px;">OCULTO</span>' : ''}
+      </td>
       <td class="L"><input type="text" id="ac-${i}-ticker" value="${c.id}" style="width:70px;" disabled></td>
       <td><input type="number" id="ac-${i}-ap" value="${S.auctionPrices[c.id] || 0}" step="0.5" style="width:90px;"></td>
       <td><button type="button" class="csel-btn" id="ac-${i}-pos" data-val="${c.finalPos||''}" onclick="openCsel(this,${S.countries.length})">${c.finalPos ? '#'+c.finalPos : '—'}</button></td>
-      <td><button class="btn btn-xs btn-outline" style="color:var(--red);border-color:var(--red);" onclick="removeCountry('${c.id}')">×</button></td>
+      <td style="display:flex;gap:4px;align-items:center;">
+        <button class="btn btn-xs btn-outline" title="${c.isHidden ? 'Mostrar en mercado' : 'Ocultar del mercado'}"
+          style="${c.isHidden ? 'color:var(--green);border-color:var(--green);' : 'color:var(--text3);border-color:var(--border2);'}"
+          onclick="toggleHideCountry('${c.id}')">${c.isHidden ? '👁 Mostrar' : '🚫 Ocultar'}</button>
+        <button class="btn btn-xs btn-outline" style="color:var(--red);border-color:var(--red);" onclick="removeCountry('${c.id}')">×</button>
+      </td>
     </tr>`
   ).join('');
   document.getElementById('admin-users-tbody').innerHTML = S.users.map(u => {
@@ -918,6 +927,15 @@ async function addCountry() {
   await loadState();
   toast(`Equipo ${id} agregado`, 'ok');
   renderAdmin();
+}
+async function toggleHideCountry(id) {
+  const c = S.countries.find(x => x.id === id);
+  if (!c) return;
+  c.isHidden = !c.isHidden;
+  await db.from('teams').update({ is_hidden: c.isHidden }).eq('id', id);
+  toast(c.isHidden ? `${c.flag} ${c.name} ocultado del mercado` : `${c.flag} ${c.name} visible en el mercado`, 'ok');
+  renderAdmin();
+  renderMarket();
 }
 async function removeCountry(id) {
   if (!confirm(`¿Eliminar el equipo ${id}? Esto borrará sus órdenes y trades relacionados.`)) return;
