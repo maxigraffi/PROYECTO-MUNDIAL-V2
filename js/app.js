@@ -1,36 +1,51 @@
 /* ═══════════════════════════════════════════════════════
-   OTC TOURNAMENT OPTIONS MARKET
-   Supabase-backed · GitHub Pages ready
+   OTC TOURNAMENT OPTIONS MARKET — V2 (Multi-torneo)
+   Supabase-backed · Vercel ready
    ═══════════════════════════════════════════════════════ */
 
 // ── CONFIGURACIÓN SUPABASE ──────────────────────────────
-// Reemplazá estos valores con los de tu proyecto Supabase
-// Los encontrás en: Settings → API
-const SUPABASE_URL      = 'https://abjjrgwmunqwdulaecwk.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_6KrgUmIO95pAzz7jR0q4aA__4PijPVZ';
+// Reemplazá con los valores de tu proyecto Supabase V2
+// Settings → API
+const SUPABASE_URL      = 'TU_SUPABASE_URL_V2';
+const SUPABASE_ANON_KEY = 'TU_SUPABASE_ANON_KEY_V2';
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const _CONFIGURED = !SUPABASE_URL.startsWith('TU_') && !SUPABASE_ANON_KEY.startsWith('TU_');
+const db = _CONFIGURED
+  ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
 
 /* ═══════════════════════════════
-   STATE (caché local del DB)
+   STATE
 ═══════════════════════════════ */
 const S = {
-  countries:   [],
-  prizeTable:  {},
+  // Torneo activo
+  tournamentId:      null,
+  tournamentName:    '',
+  tournamentStatus:  'open',
+  isTournamentAdmin: false,
+
+  // Lista de torneos (lobby)
+  tournaments: [],
+
+  // Datos del torneo activo
+  countries:    [],
+  prizeTable:   {},
   auctionPrices: {},
-  users:       [],
-  orders:      [],
-  trades:      [],
-  settings:    { minQty: 1, maxQty: 5 },
-  gameState:   'open',
-  currentUser: localStorage.getItem('otc_user') || null,
-  isAdmin:     false,
+  users:        [],
+  orders:       [],
+  trades:       [],
+  settings:     { minQty: 1, maxQty: 5 },
+  gameState:    'open',
+
+  // Usuario actual
+  currentUser:  null,   // players.id (TEXT)
+  isAdmin:      false,  // global admin (primer registrado)
 };
 
 /* ═══════════════════════════════
-   LOADING STATE
+   LOADING
 ═══════════════════════════════ */
-function showLoading(msg = 'Conectando al mercado...') {
+function showLoading(msg = 'Conectando...') {
   const ov = document.getElementById('loading-overlay');
   ov.querySelector('.loader-msg').textContent = msg;
   ov.classList.remove('hidden');
@@ -40,40 +55,210 @@ function hideLoading() {
 }
 
 /* ═══════════════════════════════
+   LOBBY
+═══════════════════════════════ */
+function showLobby() {
+  document.getElementById('lobby-screen').classList.remove('hidden');
+  document.getElementById('back-to-lobby-btn').style.display = 'none';
+  document.getElementById('tournament-name-badge').style.display = 'none';
+}
+function hideLobby() {
+  document.getElementById('lobby-screen').classList.add('hidden');
+  document.getElementById('back-to-lobby-btn').style.display = '';
+  const badge = document.getElementById('tournament-name-badge');
+  badge.textContent = S.tournamentName;
+  badge.style.display = '';
+}
+
+async function loadTournaments() {
+  const [
+    { data: all },
+    { data: myJoined },
+  ] = await Promise.all([
+    db.from('tournaments').select('*').order('created_at', { ascending: false }),
+    db.from('tournament_players').select('tournament_id').eq('player_id', S.currentUser),
+  ]);
+
+  const myIds = new Set((myJoined || []).map(r => r.tournament_id));
+  S.tournaments = (all || []).map(t => ({ ...t, isMember: myIds.has(t.id) }));
+}
+
+function renderLobby() {
+  const player = S.currentUser;
+  document.getElementById('lobby-user-bar').innerHTML =
+    `<span>👤 <strong>${player}</strong></span>` +
+    `<button class="btn btn-xs btn-outline" onclick="handleLogout()">Cerrar sesión</button>`;
+
+  const list = document.getElementById('lobby-list');
+
+  if (!S.tournaments.length) {
+    list.innerHTML = '<div class="lobby-empty">No hay torneos disponibles.<br>Creá uno para empezar.</div>';
+    return;
+  }
+
+  const mine     = S.tournaments.filter(t => t.isMember);
+  const others   = S.tournaments.filter(t => !t.isMember && t.status === 'open');
+
+  let html = '';
+
+  if (mine.length) {
+    html += `<div class="lobby-section-title" style="margin-bottom:10px;">Mis Torneos</div>`;
+    html += mine.map(t => tournamentCard(t, true)).join('');
+  }
+
+  if (others.length) {
+    html += `<div class="lobby-section-title" style="margin:${mine.length ? '20px' : '0'} 0 10px;">Torneos Disponibles</div>`;
+    html += others.map(t => tournamentCard(t, false)).join('');
+  }
+
+  if (!mine.length && !others.length) {
+    html = '<div class="lobby-empty">No hay torneos abiertos en este momento.</div>';
+  }
+
+  list.innerHTML = html;
+}
+
+function tournamentCard(t, isMember) {
+  const statusLabel = { open: 'ABIERTO', closed: 'CERRADO', liquidated: 'LIQUIDADO' }[t.status] || t.status;
+  const btn = isMember
+    ? `<button class="btn btn-sm btn-primary" onclick="enterTournament('${t.id}','${escHtml(t.name)}','${t.status}','${t.admin_id}')">Entrar →</button>`
+    : `<button class="btn btn-sm btn-outline" onclick="joinAndEnterTournament('${t.id}','${escHtml(t.name)}','${t.status}','${t.admin_id}')">Unirse</button>`;
+  return `<div class="tournament-card">
+    <div style="flex:1;">
+      <div class="tc-name">${escHtml(t.name)}</div>
+      <div class="tc-meta">Admin: ${t.admin_id || '—'} &nbsp;·&nbsp; Creado: ${new Date(t.created_at).toLocaleDateString('es-AR')}</div>
+    </div>
+    <span class="tc-status ${t.status}">${statusLabel}</span>
+    ${btn}
+  </div>`;
+}
+
+async function joinAndEnterTournament(tid, name, status, adminId) {
+  showLoading('Uniéndose al torneo...');
+  const { count } = await db.from('tournament_players')
+    .select('id', { count: 'exact', head: true }).eq('tournament_id', tid);
+  if (count >= 8) { hideLoading(); toast('El torneo ya tiene 8 jugadores.', 'err'); return; }
+
+  const { error } = await db.from('tournament_players')
+    .insert({ tournament_id: tid, player_id: S.currentUser });
+  if (error && !error.message.includes('duplicate')) {
+    hideLoading(); toast('Error al unirse: ' + error.message, 'err'); return;
+  }
+  await enterTournament(tid, name, status, adminId);
+}
+
+async function enterTournament(tid, name, status, adminId) {
+  showLoading('Cargando torneo...');
+  S.tournamentId      = tid;
+  S.tournamentName    = name;
+  S.tournamentStatus  = status;
+  S.isTournamentAdmin = (adminId === S.currentUser);
+
+  await loadState();
+  setupRealtime();
+  hideLobby();
+  hideLoading();
+
+  document.querySelectorAll('.admin-tab').forEach(t => {
+    t.style.display = S.isTournamentAdmin ? '' : 'none';
+  });
+
+  switchTabById('inicio');
+  renderInicio(); renderTicker(); updateStatus();
+  renderAll();
+  toast('Entraste a ' + name, 'ok');
+}
+
+function goToLobby() {
+  if (_realtimeChannel) {
+    db.removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+  }
+  S.tournamentId      = null;
+  S.tournamentName    = '';
+  S.isTournamentAdmin = false;
+  S.countries = []; S.orders = []; S.trades = []; S.users = [];
+  S.prizeTable = {}; S.auctionPrices = {};
+  loadTournaments().then(renderLobby);
+  showLobby();
+}
+
+// ── Crear torneo ──
+function openCreateTournament() {
+  document.getElementById('ct-name').value = '';
+  document.getElementById('create-tournament-modal').classList.add('open');
+  document.getElementById('ct-name').focus();
+}
+function closeCreateTournament() {
+  document.getElementById('create-tournament-modal').classList.remove('open');
+}
+async function confirmCreateTournament() {
+  const name = document.getElementById('ct-name').value.trim();
+  if (!name) { toast('Ingresá un nombre para el torneo.', 'err'); return; }
+
+  const btn = document.getElementById('ct-confirm');
+  btn.disabled = true;
+  const { data: t, error } = await db.from('tournaments')
+    .insert({ name, admin_id: S.currentUser, status: 'open' })
+    .select().single();
+  if (error) { btn.disabled = false; toast(error.message, 'err'); return; }
+
+  await db.from('tournament_players').insert({ tournament_id: t.id, player_id: S.currentUser });
+  btn.disabled = false;
+  closeCreateTournament();
+  toast('Torneo creado: ' + name, 'ok');
+  await enterTournament(t.id, t.name, t.status, t.admin_id);
+}
+
+/* ═══════════════════════════════
    CARGA DESDE SUPABASE
 ═══════════════════════════════ */
 async function loadState() {
+  const tid = S.tournamentId;
+  if (!tid) return;
+
   const [
     { data: settings },
-    { data: players },
+    { data: tpData },
     { data: teams },
     { data: prizes },
     { data: orders },
     { data: trades },
   ] = await Promise.all([
-    db.from('game_settings').select('*'),
-    db.from('players').select('*').order('name'),
-    db.from('teams').select('*').order('display_order'),
-    db.from('prizes').select('*').order('position'),
-    db.from('orders').select('*').order('created_at'),
-    db.from('trades').select('*').order('created_at'),
+    db.from('game_settings').select('*').eq('tournament_id', tid),
+    db.from('tournament_players').select('player_id').eq('tournament_id', tid),
+    db.from('teams').select('*').eq('tournament_id', tid).order('display_order'),
+    db.from('prizes').select('*').eq('tournament_id', tid).order('position'),
+    db.from('orders').select('*').eq('tournament_id', tid).order('created_at'),
+    db.from('trades').select('*').eq('tournament_id', tid).order('created_at'),
   ]);
+
+  // Cargar players del torneo
+  const playerIds = (tpData || []).map(r => r.player_id);
+  let players = [];
+  if (playerIds.length) {
+    const { data: pd } = await db.from('players').select('*').in('id', playerIds).order('name');
+    players = pd || [];
+  }
 
   const gs      = (settings || []).find(r => r.key === 'game_state');
   const minQCfg = (settings || []).find(r => r.key === 'min_qty');
   const maxQCfg = (settings || []).find(r => r.key === 'max_qty');
 
-  S.gameState         = gs      ? gs.value            : 'open';
+  S.gameState         = gs      ? gs.value                : 'open';
   S.settings.minQty   = minQCfg ? parseInt(minQCfg.value) : 1;
   S.settings.maxQty   = maxQCfg ? parseInt(maxQCfg.value) : 5;
 
-  S.users = (players || []).map(p => ({ id: p.id, name: p.name }));
+  S.users = (players).map(p => ({ id: p.id, name: p.name }));
 
   S.countries = (teams || []).map(t => ({
-    id: t.id, name: t.name, flag: t.flag,
-    finalPos: t.final_pos || null,
+    id:           t.id,
+    ticker:       t.ticker,
+    name:         t.name,
+    flag:         t.flag,
+    finalPos:     t.final_pos || null,
     displayOrder: t.display_order || 0,
-    isHidden: t.is_hidden || false,
+    isHidden:     t.is_hidden || false,
   }));
 
   S.auctionPrices = Object.fromEntries(
@@ -85,22 +270,22 @@ async function loadState() {
   );
 
   S.orders = (orders || []).map(o => ({
-    id:         Number(o.id),
-    ts:         new Date(o.created_at),
-    userId:     o.player_id,
-    countryId:  o.team_id,
-    side:       o.side,
-    price:      parseFloat(o.price),
-    origQty:    o.orig_qty,
-    remQty:     o.rem_qty,
-    status:     o.status,
+    id:        o.id,
+    ts:        new Date(o.created_at),
+    userId:    o.player_id,
+    countryId: o.team_id,
+    side:      o.side,
+    price:     parseFloat(o.price),
+    origQty:   o.orig_qty,
+    remQty:    o.rem_qty,
+    status:    o.status,
   }));
 
   S.trades = (trades || []).map(t => ({
-    id:          Number(t.id),
+    id:          t.id,
     ts:          new Date(t.created_at),
-    buyOrderId:  Number(t.buy_order_id),
-    sellOrderId: Number(t.sell_order_id),
+    buyOrderId:  t.buy_order_id,
+    sellOrderId: t.sell_order_id,
     buyUserId:   t.buyer_id,
     sellUserId:  t.seller_id,
     countryId:   t.team_id,
@@ -111,9 +296,11 @@ async function loadState() {
 }
 
 /* ═══════════════════════════════
-   REALTIME — refresco automático
+   REALTIME
 ═══════════════════════════════ */
 let reloadTimer = null;
+let _realtimeChannel = null;
+
 function scheduleReload() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
@@ -123,13 +310,15 @@ function scheduleReload() {
 }
 
 function setupRealtime() {
-  db.channel('otc-market')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' },       scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' },       scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'game_settings'}, scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' },        scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'players' },      scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes' },       scheduleReload)
+  if (_realtimeChannel) db.removeChannel(_realtimeChannel);
+  const tid = S.tournamentId;
+  _realtimeChannel = db.channel('otc-' + tid)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders',       filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'trades',       filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'game_settings',filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'teams',        filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes',       filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_players', filter: `tournament_id=eq.${tid}` }, scheduleReload)
     .subscribe();
 }
 
@@ -162,9 +351,8 @@ async function placeOrder(userId, cid, side, price, qty) {
   const mp = maxPrice();
   if (price > mp) return { ok: false, msg: `Precio máximo permitido: ${fmtP(mp)}` };
   const min = S.settings.minQty, max = S.settings.maxQty;
-  if (qty < min || qty > max) return { ok: false, msg: `Cantidad debe estar entre ${fmtN(min)} y ${fmtN(max)} contratos` };
+  if (qty < min || qty > max) return { ok: false, msg: `Cantidad entre ${fmtN(min)} y ${fmtN(max)} contratos` };
 
-  // Validar self-trading
   if (side === 'BUY') {
     const ownAsk = S.orders.find(o => o.countryId === cid && o.side === 'SELL' && o.status === 'live' && o.remQty > 0 && o.userId === userId && price >= o.price);
     if (ownAsk) return { ok: false, msg: `Tu BID (${fmtP(price)}) cruzaría con tu propio ASK (${fmtP(ownAsk.price)}). No se permite self-trading.` };
@@ -174,6 +362,7 @@ async function placeOrder(userId, cid, side, price, qty) {
   }
 
   const { data: newOrder, error } = await db.from('orders').insert({
+    tournament_id: S.tournamentId,
     player_id: userId, team_id: cid, side,
     price: parseFloat(price), orig_qty: qty, rem_qty: qty,
   }).select().single();
@@ -181,7 +370,7 @@ async function placeOrder(userId, cid, side, price, qty) {
   if (error) return { ok: false, msg: error.message };
 
   const order = {
-    id: Number(newOrder.id), ts: new Date(newOrder.created_at),
+    id: newOrder.id, ts: new Date(newOrder.created_at),
     userId, countryId: cid, side,
     price: parseFloat(price), origQty: qty, remQty: qty, status: 'live',
   };
@@ -225,16 +414,17 @@ async function matchOrders(cid) {
       db.from('orders').update({ rem_qty: execBid.remQty, status: execBid.status }).eq('id', execBid.id),
       db.from('orders').update({ rem_qty: execAsk.remQty, status: execAsk.status }).eq('id', execAsk.id),
       db.from('trades').insert({
-        buy_order_id:  execBid.id,
-        sell_order_id: execAsk.id,
-        buyer_id:      execBid.userId,
-        seller_id:     execAsk.userId,
+        tournament_id:  S.tournamentId,
+        buy_order_id:   execBid.id,
+        sell_order_id:  execAsk.id,
+        buyer_id:       execBid.userId,
+        seller_id:      execAsk.userId,
         team_id: cid, qty: execQty, price: execPrice,
       }).select().single(),
     ]);
 
     S.trades.push({
-      id: Number(newTrade.id), ts: new Date(newTrade.created_at),
+      id: newTrade.id, ts: new Date(newTrade.created_at),
       buyOrderId: execBid.id, sellOrderId: execAsk.id,
       buyUserId: execBid.userId, sellUserId: execAsk.userId,
       countryId: cid, qty: execQty, price: execPrice, annulled: false,
@@ -247,8 +437,8 @@ async function matchOrders(cid) {
 async function cancelOrder(orderId) {
   const o = S.orders.find(x => x.id === orderId);
   if (!o) return;
-  o.status  = 'cancelled';
-  o.remQty  = 0;
+  o.status = 'cancelled';
+  o.remQty = 0;
   await db.from('orders').update({ status: 'cancelled', rem_qty: 0 }).eq('id', orderId);
 }
 
@@ -289,21 +479,26 @@ function getAllPositions() {
 ═══════════════════════════════ */
 async function liquidateTournament() {
   const unset = S.countries.filter(c => !c.finalPos);
-  if (unset.length) { toast('Faltan posiciones finales: ' + unset.map(c => c.flag + c.id).join(', '), 'err'); return; }
+  if (unset.length) { toast('Faltan posiciones finales: ' + unset.map(c => c.flag + ' ' + c.ticker).join(', '), 'err'); return; }
   const used = S.countries.map(c => c.finalPos);
   if (new Set(used).size !== S.countries.length) { toast('Hay posiciones repetidas', 'err'); return; }
   if (!confirm('¿Confirmar liquidación del torneo? Los saldos finales quedarán calculados.')) return;
 
   S.gameState = 'closed';
+  S.tournamentStatus = 'closed';
   const liveOrders = S.orders.filter(o => o.status === 'live');
   liveOrders.forEach(o => { o.status = 'cancelled'; o.remQty = 0; });
 
   await Promise.all([
-    db.from('game_settings').upsert({ key: 'game_state', value: 'closed' }),
+    db.from('game_settings').upsert(
+      { tournament_id: S.tournamentId, key: 'game_state', value: 'closed' },
+      { onConflict: 'tournament_id,key' }
+    ),
+    db.from('tournaments').update({ status: 'closed' }).eq('id', S.tournamentId),
     ...liveOrders.map(o => db.from('orders').update({ status: 'cancelled', rem_qty: 0 }).eq('id', o.id)),
   ]);
 
-  toast('🏆 Torneo liquidado. Ver saldos en Mi Posición y Saldos Globales.', 'ok');
+  toast('Torneo liquidado. Ver saldos en Mi Posición y Saldos Globales.', 'ok');
   renderAll();
   switchTabById('mypos');
 }
@@ -350,6 +545,7 @@ function fmtP(n)  { if (n == null) return '—'; return '$' + parseFloat(n).toFi
 function fmtN(n)  { return Math.round(n).toLocaleString('es-AR'); }
 function fmtTS(d) { return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); }
 function cls(n)   { return n > 0 ? 'up' : n < 0 ? 'dn' : 'muted'; }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 /* ═══════════════════════════════
    RENDER — INICIO
@@ -372,7 +568,7 @@ function renderInicio() {
     const lt = getLastTrade(c.id);
     return `<tr class="hover-row">
       <td class="L">${c.flag} <strong>${c.name}</strong></td>
-      <td class="L" style="font-family:var(--mono);color:var(--text3);">${c.id}</td>
+      <td class="L" style="font-family:var(--mono);color:var(--text3);">${c.ticker}</td>
       <td style="font-family:var(--mono);">${fmtP(ap)}</td>
       <td style="font-family:var(--mono);">${lt ? fmtP(lt.price) : '<span class="muted">—</span>'}</td>
     </tr>`;
@@ -386,7 +582,7 @@ function renderMarket() {
   const q  = document.getElementById('mkt-search').value.toLowerCase();
   const mp = maxPrice();
   document.getElementById('mkt-maxprice-lbl').textContent = `Precio máx: ${fmtP(mp)}`;
-  const list = S.countries.filter(c => !c.isHidden && (c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q)));
+  const list = S.countries.filter(c => !c.isHidden && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)));
   document.getElementById('mkt-count').textContent = list.length + ' equipos';
   const disabled = S.gameState === 'closed' ? 'disabled' : '';
   document.getElementById('market-panels').innerHTML = list.map(c => {
@@ -419,7 +615,7 @@ function renderMarket() {
     return `<div class="country-panel">
       <div class="country-panel-hd" onclick="togglePanel('${c.id}')">
         <span class="cp-flag">${c.flag}</span>
-        <div style="min-width:130px;flex-shrink:0;"><div class="cp-name">${c.name}</div><div class="cp-ticker">${c.id}</div></div>
+        <div style="min-width:130px;flex-shrink:0;"><div class="cp-name">${c.name}</div><div class="cp-ticker">${c.ticker}</div></div>
         <div style="flex:1;display:flex;justify-content:center;gap:16px;align-items:center;" onclick="event.stopPropagation()">
           <div style="display:flex;gap:3px;align-items:center;">
             <input type="number" id="bp-${c.id}" placeholder="Precio" min="0.01" step="0.01" style="width:68px;padding:3px 6px;font-size:11px;" ${disabled} onfocus="showPriceHint('${c.id}','BUY')">
@@ -479,20 +675,30 @@ function switchHistTab(tab) {
 function renderHistory() {
   const csel = document.getElementById('hist-country');
   if (csel.options.length <= 1) {
-    S.countries.forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.flag + ' ' + c.name; csel.appendChild(o); });
+    csel.querySelectorAll('option:not([value=""])').forEach(o => o.remove());
+    S.countries.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.flag + ' ' + c.name;
+      csel.appendChild(o);
+    });
   }
   const q    = document.getElementById('hist-q').value.toLowerCase();
   const cid  = document.getElementById('hist-country').value;
   const side = document.getElementById('hist-side').value;
   let tr = S.trades.slice().reverse();
   if (cid) tr = tr.filter(t => t.countryId === cid);
-  if (q)   tr = tr.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return (c && c.name.toLowerCase().includes(q)) || t.buyUserId.toLowerCase().includes(q) || t.sellUserId.toLowerCase().includes(q); });
+  if (q)   tr = tr.filter(t => {
+    const c = S.countries.find(x => x.id === t.countryId);
+    return (c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q))) ||
+           t.buyUserId.toLowerCase().includes(q) || t.sellUserId.toLowerCase().includes(q);
+  });
+  const nameOf = cid => { const c = S.countries.find(x => x.id === cid); return c ? c.flag + ' ' + c.name : cid; };
   document.getElementById('hist-global-count').textContent = tr.length + ' trades';
   document.getElementById('hist-global-tbody').innerHTML = tr.map(t => {
     const c = S.countries.find(x => x.id === t.countryId) || {};
     return `<tr class="hover-row ${t.annulled ? 'tag-annulled' : ''}">
       <td class="L" style="font-family:var(--mono);font-size:10px;color:var(--text3);">${fmtTS(t.ts)}</td>
-      <td class="L">${c.flag || ''} ${c.name || t.countryId}</td>
+      <td class="L">${c.flag || ''} ${c.name || nameOf(t.countryId)}</td>
       <td class="L" style="color:var(--green);font-family:var(--mono);">${t.buyUserId}</td>
       <td class="L" style="color:var(--red);font-family:var(--mono);">${t.sellUserId}</td>
       <td>${fmtN(t.qty)}</td>
@@ -505,7 +711,7 @@ function renderHistory() {
   let mine = S.trades.slice().reverse().filter(t => t.buyUserId === u || t.sellUserId === u);
   if (cid)  mine = mine.filter(t => t.countryId === cid);
   if (side) mine = mine.filter(t => side === 'BUY' ? t.buyUserId === u : t.sellUserId === u);
-  if (q)    mine = mine.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return c && c.name.toLowerCase().includes(q); });
+  if (q)    mine = mine.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)); });
   document.getElementById('hist-mine-count').textContent = mine.length + ' operaciones';
   document.getElementById('hist-mine-tbody').innerHTML = mine.map(t => {
     const c = S.countries.find(x => x.id === t.countryId) || {};
@@ -533,7 +739,7 @@ function renderHistory() {
       <td style="font-family:var(--mono);font-weight:700;">${fmtP(o.price)}</td>
       <td>${fmtN(o.origQty)}</td>
       <td style="color:var(--accent);">${fmtN(o.remQty)}</td>
-      <td><button class="btn btn-xs btn-outline" style="color:var(--red);border-color:var(--red);" onclick="doCancelOrder(${o.id})">Cancelar</button></td>
+      <td><button class="btn btn-xs btn-outline" style="color:var(--red);border-color:var(--red);" onclick="doCancelOrder('${o.id}')">Cancelar</button></td>
     </tr>`;
   }).join('') || emptyRow(7);
 }
@@ -570,8 +776,8 @@ function renderMyPos() {
   }).filter(Boolean);
   document.getElementById('mypos-tbody').innerHTML = rows.join('') || emptyRow(7, 'Sin posiciones. Operá en el mercado para construir tu cartera.');
 
-  const allTs      = S.trades.filter(t => !t.annulled && (t.buyUserId === u || t.sellUserId === u));
-  const totalBought = allTs.filter(t => t.buyUserId === u).reduce((s, t) => s + t.qty, 0);
+  const allTs       = S.trades.filter(t => !t.annulled && (t.buyUserId === u || t.sellUserId === u));
+  const totalBought = allTs.filter(t => t.buyUserId  === u).reduce((s, t) => s + t.qty, 0);
   const totalSold   = allTs.filter(t => t.sellUserId === u).reduce((s, t) => s + t.qty, 0);
   const liveOrders  = S.orders.filter(o => o.userId === u && o.status === 'live' && o.remQty > 0).length;
   document.getElementById('mypos-stats').innerHTML = [
@@ -581,7 +787,6 @@ function renderMyPos() {
     { lbl: 'Estado Torneo', val: S.gameState === 'closed' ? 'CERRADO' : 'ABIERTO', sub: '', vc: S.gameState === 'closed' ? 'dn' : 'up' },
   ].map(s => `<div class="stat"><div class="stat-lbl">${s.lbl}</div><div class="stat-val ${s.vc || ''}">${s.val}</div><div class="stat-sub">${s.sub}</div></div>`).join('');
 
-  // Mark To Market
   let mtmTotal = 0;
   const mtmRows = S.countries.map(c => {
     const pos = getUserPosition(u, c.id);
@@ -595,7 +800,7 @@ function renderMyPos() {
     mtmTotal += teamPnl;
     const pSign = n => n >= 0 ? '+' : '';
     return `<tr class="hover-row">
-      <td class="L">${c.flag} <strong>${c.name}</strong> <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">${c.id}</span></td>
+      <td class="L">${c.flag} <strong>${c.name}</strong> <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">${c.ticker}</span></td>
       <td class="${cls(pos.net)}" style="font-weight:700;">${pos.net > 0 ? '+' : ''}${fmtN(pos.net)}</td>
       <td style="font-family:var(--mono);">${pos.bought        > 0 ? fmtP(pos.avgBuy)  : '<span class="muted">—</span>'}</td>
       <td style="font-family:var(--mono);">${pos.soldContracts > 0 ? fmtP(pos.avgSell) : '<span class="muted">—</span>'}</td>
@@ -656,7 +861,7 @@ function renderAdmin() {
         <input type="text" id="ac-${i}-name" value="${c.name}">
         ${c.isHidden ? '<span style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-left:6px;">OCULTO</span>' : ''}
       </td>
-      <td class="L"><input type="text" id="ac-${i}-ticker" value="${c.id}" style="width:70px;" disabled></td>
+      <td class="L"><input type="text" id="ac-${i}-ticker" value="${c.ticker}" style="width:70px;" disabled></td>
       <td><input type="number" id="ac-${i}-ap" value="${S.auctionPrices[c.id] || 0}" step="0.5" style="width:90px;"></td>
       <td><button type="button" class="csel-btn" id="ac-${i}-pos" data-val="${c.finalPos||''}" onclick="openCsel(this,${S.countries.length})">${c.finalPos ? '#'+c.finalPos : '—'}</button></td>
       <td style="display:flex;gap:4px;align-items:center;">
@@ -687,7 +892,7 @@ function renderAdmin() {
       <td class="L">${c.flag || ''} ${c.name || o.countryId}</td>
       <td>${o.side === 'BUY' ? '<span class="badge b-buy">BID</span>' : '<span class="badge b-sell">ASK</span>'}</td>
       <td>${fmtP(o.price)}</td><td>${fmtN(o.remQty)}</td>
-      <td><button class="btn btn-xs btn-red" onclick="adminCancelOrder(${o.id})">Cancelar</button></td>
+      <td><button class="btn btn-xs btn-red" onclick="adminCancelOrder('${o.id}')">Cancelar</button></td>
     </tr>`;
   }).join('') || emptyRow(7);
   document.getElementById('admin-trades-tbody').innerHTML = S.trades.slice().reverse().map(t => {
@@ -699,7 +904,7 @@ function renderAdmin() {
       <td class="L" style="color:var(--red);font-family:var(--mono);">${t.sellUserId}</td>
       <td>${fmtN(t.qty)}</td><td>${fmtP(t.price)}</td>
       <td>${t.annulled ? '<span class="badge b-cancel">ANULADO</span>' : '<span class="badge b-live">EJECUTADO</span>'}</td>
-      <td>${!t.annulled ? `<button class="btn btn-xs btn-outline" style="color:var(--red);border-color:var(--red);" onclick="adminAnnulTrade(${t.id})">Anular</button>` : ''}</td>
+      <td>${!t.annulled ? `<button class="btn btn-xs btn-outline" style="color:var(--red);border-color:var(--red);" onclick="adminAnnulTrade('${t.id}')">Anular</button>` : ''}</td>
     </tr>`;
   }).join('') || emptyRow(8);
   const allPos = getAllPositions();
@@ -773,7 +978,7 @@ function openOrder(cid, side) {
   const c = S.countries.find(x => x.id === cid);
   document.getElementById('om-flag').textContent    = c.flag;
   document.getElementById('om-name').textContent    = c.name;
-  document.getElementById('om-ticker').textContent  = c.id;
+  document.getElementById('om-ticker').textContent  = c.ticker;
   document.getElementById('om-maxprice').textContent = fmtP(maxPrice());
   document.getElementById('om-price').value = '';
   document.getElementById('om-qty').value   = S.settings.minQty;
@@ -813,7 +1018,8 @@ async function confirmOrder() {
   document.getElementById('om-confirm').disabled = false;
   if (!r.ok) { toast(r.msg, 'err'); return; }
   closeModal();
-  toast(`Orden ${OM.side} ingresada: ${fmtN(qty)} contratos de ${OM.cid} a ${fmtP(price)}`, 'ok');
+  const c = S.countries.find(x => x.id === OM.cid);
+  toast(`Orden ${OM.side} ingresada: ${fmtN(qty)} contratos de ${c ? c.ticker : OM.cid} a ${fmtP(price)}`, 'ok');
   renderAll();
 }
 function closeModal() { document.getElementById('order-modal').classList.remove('open'); }
@@ -861,7 +1067,7 @@ function showPriceHint(cid, side) {
 }
 async function submitInlineOrder(cid, side) {
   if (S.gameState === 'closed') { toast('Torneo cerrado.', 'err'); return; }
-  if (!S.currentUser) { toast('Seleccioná un usuario primero', 'err'); return; }
+  if (!S.currentUser) { toast('Sesión no iniciada', 'err'); return; }
   const priceEl = document.getElementById((side === 'BUY' ? 'bp-' : 'ap-') + cid);
   const qtyEl   = document.getElementById((side === 'BUY' ? 'bq-' : 'aq-') + cid);
   const price   = parseFloat(priceEl?.value);
@@ -870,7 +1076,8 @@ async function submitInlineOrder(cid, side) {
   const r = await placeOrder(S.currentUser, cid, side, price, qty);
   if (!r.ok) { toast(r.msg, 'err'); return; }
   priceEl.value = '';
-  toast(`${side === 'BUY' ? 'BID' : 'ASK'} ingresado: ${fmtN(qty)} contrato(s) de ${cid} a ${fmtP(price)}`, 'ok');
+  const c = S.countries.find(x => x.id === cid);
+  toast(`${side === 'BUY' ? 'BID' : 'ASK'} ingresado: ${fmtN(qty)} contrato(s) de ${c ? c.ticker : cid} a ${fmtP(price)}`, 'ok');
   renderAll();
 }
 async function savePrizes() {
@@ -880,7 +1087,10 @@ async function savePrizes() {
     const v = parseFloat(document.getElementById(`pr-${i}`)?.value || 0);
     if (v < 0) { toast('Los premios no pueden ser negativos', 'err'); return; }
     S.prizeTable[i] = v;
-    updates.push(db.from('prizes').upsert({ position: i, amount: v }));
+    updates.push(db.from('prizes').upsert(
+      { tournament_id: S.tournamentId, position: i, amount: v },
+      { onConflict: 'tournament_id,position' }
+    ));
   }
   await Promise.all(updates);
   toast('Premios guardados', 'ok');
@@ -893,21 +1103,29 @@ async function saveSettings() {
   S.settings.minQty = minQ;
   S.settings.maxQty = maxQ;
   await Promise.all([
-    db.from('game_settings').upsert({ key: 'min_qty', value: String(minQ) }),
-    db.from('game_settings').upsert({ key: 'max_qty', value: String(maxQ) }),
+    db.from('game_settings').upsert(
+      { tournament_id: S.tournamentId, key: 'min_qty', value: String(minQ) },
+      { onConflict: 'tournament_id,key' }
+    ),
+    db.from('game_settings').upsert(
+      { tournament_id: S.tournamentId, key: 'max_qty', value: String(maxQ) },
+      { onConflict: 'tournament_id,key' }
+    ),
   ]);
   toast('Configuración guardada', 'ok');
 }
 async function saveCountries() {
   const updates = [];
   S.countries.forEach((c, i) => {
-    c.flag     = document.getElementById(`ac-${i}-flag`)?.value || c.flag;
-    c.name     = document.getElementById(`ac-${i}-name`)?.value || c.name;
-    const ap   = parseFloat(document.getElementById(`ac-${i}-ap`)?.value || 0);
-    const pos  = parseInt(document.getElementById(`ac-${i}-pos`)?.dataset.val);
+    c.flag    = document.getElementById(`ac-${i}-flag`)?.value || c.flag;
+    c.name    = document.getElementById(`ac-${i}-name`)?.value || c.name;
+    const ap  = parseFloat(document.getElementById(`ac-${i}-ap`)?.value || 0);
+    const pos = parseInt(document.getElementById(`ac-${i}-pos`)?.dataset.val);
     S.auctionPrices[c.id] = ap;
     c.finalPos = isNaN(pos) ? null : pos;
-    updates.push(db.from('teams').update({ flag: c.flag, name: c.name, auction_price: ap, final_pos: c.finalPos || null }).eq('id', c.id));
+    updates.push(db.from('teams').update({
+      flag: c.flag, name: c.name, auction_price: ap, final_pos: c.finalPos || null,
+    }).eq('id', c.id));
   });
   await Promise.all(updates);
   toast('Equipos guardados', 'ok');
@@ -915,17 +1133,22 @@ async function saveCountries() {
   renderAll();
 }
 async function addCountry() {
-  const id   = prompt('Ticker del equipo (ej: MIL):')?.toUpperCase().trim();
-  const name = prompt('Nombre completo:')?.trim();
-  const flag = prompt('Emoji bandera/escudo:')?.trim() || '🏳️';
-  if (!id || !name) return;
-  if (S.countries.find(c => c.id === id)) { toast('Ya existe un equipo con ese ticker', 'err'); return; }
-  const { error } = await db.from('teams').insert({ id, name, flag, auction_price: 0, display_order: S.countries.length + 1 });
+  const ticker = prompt('Ticker del equipo (ej: MIL):')?.toUpperCase().trim();
+  const name   = prompt('Nombre completo:')?.trim();
+  const flag   = prompt('Emoji bandera/escudo:')?.trim() || '🏳️';
+  if (!ticker || !name) return;
+  if (S.countries.find(c => c.ticker === ticker)) { toast('Ya existe un equipo con ese ticker', 'err'); return; }
+  const { error } = await db.from('teams').insert({
+    tournament_id: S.tournamentId,
+    ticker, name, flag, auction_price: 0, display_order: S.countries.length + 1,
+  });
   if (error) { toast(error.message, 'err'); return; }
-  // Add prize row for new position
-  await db.from('prizes').upsert({ position: S.countries.length + 1, amount: 0 });
+  await db.from('prizes').upsert(
+    { tournament_id: S.tournamentId, position: S.countries.length + 1, amount: 0 },
+    { onConflict: 'tournament_id,position' }
+  );
   await loadState();
-  toast(`Equipo ${id} agregado`, 'ok');
+  toast(`Equipo ${ticker} agregado`, 'ok');
   renderAdmin();
 }
 async function toggleHideCountry(id) {
@@ -938,29 +1161,24 @@ async function toggleHideCountry(id) {
   renderMarket();
 }
 async function removeCountry(id) {
-  if (!confirm(`¿Eliminar el equipo ${id}? Esto borrará sus órdenes y trades relacionados.`)) return;
+  const c = S.countries.find(x => x.id === id);
+  if (!confirm(`¿Eliminar el equipo ${c ? c.ticker : id}? Esto borrará sus órdenes y trades relacionados.`)) return;
   await db.from('teams').delete().eq('id', id);
   await loadState();
-  renderAdmin();
-}
-async function addUser() {
-  const name = prompt('Nombre del usuario:');
-  if (!name) return;
-  const id = name.toUpperCase().replace(/\s/g, '').slice(0, 8);
-  if (S.users.find(u => u.id === id)) { toast('ID ya existe', 'err'); return; }
-  const { error } = await db.from('players').insert({ id, name });
-  if (error) { toast(error.message, 'err'); return; }
-  S.users.push({ id, name });
-  toast('Usuario ' + id + ' agregado', 'ok');
   renderAdmin();
 }
 async function resetGame() {
   if (!confirm('¿Iniciar nueva partida? Se eliminarán TODOS los trades y órdenes, y se reabrirá el torneo.')) return;
   await Promise.all([
-    db.from('trades').delete().neq('id', 0),
-    db.from('orders').delete().neq('id', 0),
-    db.from('game_settings').upsert({ key: 'game_state', value: 'open' }),
+    db.from('trades').delete().eq('tournament_id', S.tournamentId),
+    db.from('orders').delete().eq('tournament_id', S.tournamentId),
+    db.from('game_settings').upsert(
+      { tournament_id: S.tournamentId, key: 'game_state', value: 'open' },
+      { onConflict: 'tournament_id,key' }
+    ),
+    db.from('tournaments').update({ status: 'open' }).eq('id', S.tournamentId),
   ]);
+  S.tournamentStatus = 'open';
   await loadState();
   renderAll();
   toast('Nueva partida iniciada', 'ok');
@@ -978,7 +1196,7 @@ function switchLoginTab(tab) {
   _loginTab = tab;
   document.getElementById('ltab-in').classList.toggle('active', tab === 'in');
   document.getElementById('ltab-up').classList.toggle('active', tab === 'up');
-  document.getElementById('lf-name').style.display = tab === 'up' ? '' : 'none';
+  document.getElementById('lf-name').style.display  = tab === 'up' ? '' : 'none';
   document.getElementById('l-submit').textContent   = tab === 'in' ? 'Ingresar' : 'Crear cuenta';
   document.getElementById('l-hint').style.display   = tab === 'up' ? 'none' : '';
   _clearLoginError();
@@ -1017,12 +1235,13 @@ async function _doSignIn(email, pass) {
 }
 
 async function _doSignUp(name, email, pass) {
-  if (S.users.length >= 8) { _setLoginError('El torneo ya tiene 8 jugadores. Contactá al admin.'); return; }
   const { data, error } = await db.auth.signUp({ email, password: pass });
   if (error) { _setLoginError(error.message); return; }
 
-  const isFirst  = S.users.length === 0;
-  const playerId = _generateId(name);
+  // Chequear si es el primer player global
+  const { count } = await db.from('players').select('id', { count: 'exact', head: true });
+  const isFirst   = count === 0;
+  const playerId  = _generateId(name);
 
   const { error: e2 } = await db.from('players').insert({
     id: playerId, name, email,
@@ -1034,7 +1253,6 @@ async function _doSignUp(name, email, pass) {
     _setLoginError('Error al crear el perfil: ' + e2.message);
     return;
   }
-  await loadState();
   await _afterAuth(data.user);
 }
 
@@ -1054,31 +1272,39 @@ async function _afterAuth(authUser) {
     _setLoginError('No se encontró tu perfil. Registrate primero.');
     return;
   }
-  await loadState();
   _setCurrentPlayer(player);
   hideLoginScreen();
-  renderAll();
-  renderInicio(); renderTicker(); updateStatus();
+
+  // Ir al lobby
+  showLoading('Cargando torneos...');
+  await loadTournaments();
+  hideLoading();
+  showLobby();
+  renderLobby();
   toast('Bienvenido, ' + player.name + ' 👋', 'ok');
 }
 
 function _setCurrentPlayer(player) {
   S.currentUser = player.id;
   S.isAdmin     = player.is_admin || false;
-  localStorage.setItem('otc_user', player.id);
   document.getElementById('cur-user-lbl').textContent = player.name || player.id;
-  document.querySelectorAll('.admin-tab').forEach(t => {
-    t.style.display = S.isAdmin ? '' : 'none';
-  });
 }
 
 async function handleLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
+  if (_realtimeChannel) {
+    db.removeChannel(_realtimeChannel);
+    _realtimeChannel = null;
+  }
   await db.auth.signOut();
-  S.currentUser = null;
-  S.isAdmin     = false;
-  localStorage.removeItem('otc_user');
+  S.currentUser      = null;
+  S.isAdmin          = false;
+  S.tournamentId     = null;
+  S.isTournamentAdmin= false;
   document.getElementById('cur-user-lbl').textContent = '—';
+  document.getElementById('lobby-screen').classList.add('hidden');
+  document.getElementById('back-to-lobby-btn').style.display = 'none';
+  document.getElementById('tournament-name-badge').style.display = 'none';
   showLoginScreen();
 }
 
@@ -1095,7 +1321,7 @@ function renderTicker() {
     const chgStr = changePct !== null
       ? `<span class="${changePct >= 0 ? 'up' : 'dn'}">${changePct >= 0 ? '▲' : '▼'}${Math.abs(changePct).toFixed(1)}%</span>`
       : `<span class="muted">—%</span>`;
-    return `<span class="tick-item"><span class="sym">${c.id}</span><span class="px">${px ? fmtP(px) : '—'}</span>${chgStr}</span>`;
+    return `<span class="tick-item"><span class="sym">${c.ticker}</span><span class="px">${px ? fmtP(px) : '—'}</span>${chgStr}</span>`;
   }).join('');
   const el = document.getElementById('ticker');
   el.innerHTML = items + items;
@@ -1152,10 +1378,10 @@ function emptyRow(cols, msg = 'Sin datos') {
   return `<tr><td colspan="${cols}" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--mono);font-size:11px;">${msg}</td></tr>`;
 }
 function renderAll() {
+  if (!S.tournamentId) return;
   const active = document.querySelector('.tab.active')?.dataset?.tab;
-  // Mostrar tabs de admin solo al administrador
   document.querySelectorAll('.admin-tab').forEach(t => {
-    t.style.display = S.isAdmin ? '' : 'none';
+    t.style.display = S.isTournamentAdmin ? '' : 'none';
   });
   renderTicker();
   updateStatus();
@@ -1169,16 +1395,25 @@ function renderAll() {
 }
 
 /* ═══════════════════════════════
-   KEYBOARD / MODAL CLOSE
+   KEYBOARD / MODAL
 ═══════════════════════════════ */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); }
+  if (e.key === 'Escape') {
+    closeModal();
+    closeCreateTournament();
+  }
   if (e.key === 'Enter' && !document.getElementById('login-screen').classList.contains('hidden')) {
     handleAuth();
+  }
+  if (e.key === 'Enter' && document.getElementById('create-tournament-modal').classList.contains('open')) {
+    confirmCreateTournament();
   }
 });
 document.getElementById('order-modal').addEventListener('click', e => {
   if (e.target === document.getElementById('order-modal')) closeModal();
+});
+document.getElementById('create-tournament-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('create-tournament-modal')) closeCreateTournament();
 });
 
 /* ═══════════════════════════════
@@ -1194,25 +1429,25 @@ function downloadTradesCSV(type) {
   if (type === 'global') {
     let tr = S.trades.slice().reverse();
     if (cid) tr = tr.filter(t => t.countryId === cid);
-    if (q)   tr = tr.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return (c && c.name.toLowerCase().includes(q)) || t.buyUserId.toLowerCase().includes(q) || t.sellUserId.toLowerCase().includes(q); });
+    if (q)   tr = tr.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return (c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q))) || t.buyUserId.toLowerCase().includes(q) || t.sellUserId.toLowerCase().includes(q); });
     headers  = ['Hora','Equipo','Ticker','Comprador','Vendedor','Cantidad','Precio (miles $)','Nocional Total','Estado'];
     rows     = tr.map(t => {
       const c = S.countries.find(x => x.id === t.countryId) || {};
-      return [fmtTS(t.ts), c.name || t.countryId, t.countryId, t.buyUserId, t.sellUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
+      return [fmtTS(t.ts), c.name || t.countryId, c.ticker || t.countryId, t.buyUserId, t.sellUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
     });
-    filename = 'todos_los_trades.csv';
+    filename = `${S.tournamentName.replace(/\s+/g,'_')}_todos_los_trades.csv`;
   } else {
     let mine = S.trades.slice().reverse().filter(t => t.buyUserId === u || t.sellUserId === u);
     if (cid)  mine = mine.filter(t => t.countryId === cid);
     if (side) mine = mine.filter(t => side === 'BUY' ? t.buyUserId === u : t.sellUserId === u);
-    if (q)    mine = mine.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return c && c.name.toLowerCase().includes(q); });
+    if (q)    mine = mine.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)); });
     headers  = ['Hora','Equipo','Ticker','Lado','Contraparte','Cantidad','Precio (miles $)','Nocional','Estado'];
     rows     = mine.map(t => {
       const c = S.countries.find(x => x.id === t.countryId) || {};
       const isBuy = t.buyUserId === u;
-      return [fmtTS(t.ts), c.name || t.countryId, t.countryId, isBuy ? 'COMPRE' : 'VENDI', isBuy ? t.sellUserId : t.buyUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
+      return [fmtTS(t.ts), c.name || t.countryId, c.ticker || t.countryId, isBuy ? 'COMPRE' : 'VENDI', isBuy ? t.sellUserId : t.buyUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
     });
-    filename = 'mis_operaciones.csv';
+    filename = `${S.tournamentName.replace(/\s+/g,'_')}_mis_operaciones.csv`;
   }
 
   const csv  = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -1233,29 +1468,20 @@ function openCsel(btn, n) {
   const list = document.createElement('div');
   list.id = 'csel-list';
 
-  // Decide si abrir hacia arriba o hacia abajo
   const maxH = 220;
   const spaceBelow = window.innerHeight - r.bottom - 8;
   const openUp = spaceBelow < maxH && r.top > spaceBelow;
 
   Object.assign(list.style, {
-    position: 'fixed',
-    left: r.left + 'px',
+    position: 'fixed', left: r.left + 'px',
     minWidth: Math.max(r.width, 80) + 'px',
-    maxHeight: maxH + 'px',
-    overflowY: 'auto',
-    background: '#0d1117',
-    border: '1px solid #2a3a50',
-    borderRadius: '4px',
-    zIndex: '99999',
-    boxShadow: '0 6px 24px rgba(0,0,0,.85)',
-    fontFamily: 'monospace',
+    maxHeight: maxH + 'px', overflowY: 'auto',
+    background: '#0d1117', border: '1px solid #2a3a50',
+    borderRadius: '4px', zIndex: '99999',
+    boxShadow: '0 6px 24px rgba(0,0,0,.85)', fontFamily: 'monospace',
   });
-  if (openUp) {
-    list.style.bottom = (window.innerHeight - r.top + 2) + 'px';
-  } else {
-    list.style.top = (r.bottom + 2) + 'px';
-  }
+  if (openUp) list.style.bottom = (window.innerHeight - r.top + 2) + 'px';
+  else list.style.top = (r.bottom + 2) + 'px';
 
   const opts = [{ v: '', l: '—' }, ...Array.from({ length: n }, (_, k) => ({ v: String(k + 1), l: '#' + (k + 1) }))];
   opts.forEach(o => {
@@ -1263,11 +1489,8 @@ function openCsel(btn, n) {
     d.textContent = o.l;
     const active = o.v === cur;
     Object.assign(d.style, {
-      padding: '7px 14px',
-      cursor: 'pointer',
-      fontSize: '12px',
-      color: active ? '#3d9eff' : '#dce8f5',
-      fontWeight: active ? '700' : '400',
+      padding: '7px 14px', cursor: 'pointer', fontSize: '12px',
+      color: active ? '#3d9eff' : '#dce8f5', fontWeight: active ? '700' : '400',
     });
     d.onmouseenter = () => { d.style.background = '#1a2133'; };
     d.onmouseleave = () => { d.style.background = ''; };
@@ -1277,7 +1500,6 @@ function openCsel(btn, n) {
 
   document.body.appendChild(list);
 
-  // Scroll hasta la opción activa
   const activeIdx = opts.findIndex(o => o.v === cur);
   if (activeIdx > 0) list.children[activeIdx]?.scrollIntoView({ block: 'nearest' });
 
@@ -1294,11 +1516,16 @@ function openCsel(btn, n) {
    BOOT
 ═══════════════════════════════ */
 (async () => {
-  showLoading('Conectando al mercado...');
-  try {
-    await loadState();
-    setupRealtime();
+  showLoading('Conectando...');
 
+  if (!_CONFIGURED) {
+    document.querySelector('#loading-overlay .loader-msg').textContent =
+      '⚠️ Configurá las credenciales de Supabase en js/app.js';
+    document.querySelector('#loading-overlay .loader-spinner').style.display = 'none';
+    return;
+  }
+
+  try {
     const { data: { session } } = await db.auth.getSession();
 
     if (session) {
@@ -1306,12 +1533,12 @@ function openCsel(btn, n) {
         .select('*').eq('auth_user_id', session.user.id).single();
       if (player) {
         _setCurrentPlayer(player);
+        await loadTournaments();
         hideLoading();
-        renderInicio(); renderTicker(); updateStatus();
-        renderAll();
+        showLobby();
+        renderLobby();
         return;
       }
-      // Sesión sin perfil — limpiar
       await db.auth.signOut();
     }
 
@@ -1320,7 +1547,7 @@ function openCsel(btn, n) {
   } catch (err) {
     console.error(err);
     document.querySelector('#loading-overlay .loader-msg').textContent =
-      '❌ Error al conectar con Supabase. Revisá la configuración en js/app.js';
+      '❌ Error al conectar con Supabase. Revisá las credenciales en js/app.js';
     document.querySelector('#loading-overlay .loader-spinner').style.display = 'none';
   }
 })();

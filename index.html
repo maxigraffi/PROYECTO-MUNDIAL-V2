@@ -46,17 +46,34 @@
   </div>
 </div>
 
+<!-- LOBBY SCREEN -->
+<div id="lobby-screen" class="hidden">
+  <div class="lobby-wrap">
+    <div class="lobby-box">
+      <div class="lobby-logo">OTC<em>/</em>OPTIONS</div>
+      <div class="lobby-sub">Tournament Market</div>
+      <div class="lobby-user-bar" id="lobby-user-bar"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="lobby-section-title" style="border:none;padding:0;">Torneos</div>
+        <button class="btn btn-sm btn-outline" onclick="openCreateTournament()">+ Crear Torneo</button>
+      </div>
+      <div id="lobby-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- LOADING OVERLAY -->
 <div id="loading-overlay">
   <div class="loader-logo">OTC/OPTIONS</div>
   <div class="loader-spinner"></div>
-  <div class="loader-msg">Conectando al mercado...</div>
+  <div class="loader-msg">Conectando...</div>
 </div>
 
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="logo">OTC<em>/</em>OPTIONS <em style="font-size:10px">· TOURNAMENT MARKET</em></div>
   <div class="topbar-mid">
+    <span id="tournament-name-badge" style="display:none;font-family:var(--mono);font-size:11px;color:var(--gold);background:var(--gold-bg);border:1px solid rgba(255,184,48,.2);padding:3px 10px;border-radius:3px;white-space:nowrap;flex-shrink:0;"></span>
     <div class="ticker-wrap"><div class="ticker-scroll" id="ticker"></div></div>
   </div>
   <div class="topbar-right">
@@ -65,6 +82,7 @@
     <div class="user-chip" style="cursor:default;">
       <span>👤</span><span id="cur-user-lbl">—</span>
     </div>
+    <button class="icon-btn" id="back-to-lobby-btn" onclick="goToLobby()" title="Volver a torneos" style="display:none;">← Torneos</button>
     <button class="icon-btn" onclick="toggleTheme()">◑</button>
     <button class="icon-btn" onclick="handleLogout()" title="Cerrar sesión">⏻</button>
   </div>
@@ -300,11 +318,8 @@
 
   <div class="admin-section collapsed" id="as-users">
     <div class="admin-section-hd" onclick="toggleAdminSection('as-users')">
-      <span class="admin-section-title">👥 Usuarios</span>
-      <div class="admin-section-actions">
-        <button class="btn btn-sm btn-outline" onclick="event.stopPropagation();addUser()">+ Agregar Usuario</button>
-        <span class="admin-section-chevron">▾</span>
-      </div>
+      <span class="admin-section-title">👥 Jugadores en este Torneo</span>
+      <div class="admin-section-actions"><span class="admin-section-chevron">▾</span></div>
     </div>
     <div class="admin-section-body">
       <div class="tbl-wrap"><table>
@@ -404,6 +419,28 @@
   </div>
 </div>
 
+<!-- CREATE TOURNAMENT MODAL -->
+<div class="modal-ov" id="create-tournament-modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-title">Nuevo Torneo</span>
+      <button class="modal-x" onclick="closeCreateTournament()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Nombre del torneo</label>
+        <input type="text" id="ct-name" placeholder="Ej: Copa América 2026">
+      </div>
+      <div class="info-banner" style="font-size:10px;">
+        Vas a ser el administrador de este torneo. Podrás configurar equipos, premios y liquidar al final.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeCreateTournament()">Cancelar</button>
+      <button class="btn btn-primary" id="ct-confirm" onclick="confirmCreateTournament()">Crear Torneo →</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast-ct"></div>
 

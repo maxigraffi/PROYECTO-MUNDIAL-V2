@@ -262,3 +262,23 @@ label{font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.05em;tex
 .login-hint{font-size:10px;color:var(--text3);font-family:var(--mono);text-align:center;line-height:1.6;}
 .csel-btn{background:var(--bg3);border:1px solid var(--border2);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:11px;padding:3px 8px;cursor:pointer;width:70px;text-align:center;transition:border-color .15s;}
 .csel-btn:hover{border-color:var(--accent);}
+
+/* ── LOBBY SCREEN ── */
+#lobby-screen{position:fixed;inset:0;background:var(--bg);z-index:500;overflow-y:auto;display:flex;}
+#lobby-screen.hidden{display:none;}
+.lobby-wrap{width:100%;max-width:640px;margin:auto;padding:40px 20px;}
+.lobby-box{display:flex;flex-direction:column;gap:20px;}
+.lobby-logo{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--accent);letter-spacing:.1em;text-align:center;}
+.lobby-logo em{color:var(--text3);font-style:normal;font-weight:300;}
+.lobby-sub{font-size:10px;color:var(--text3);text-align:center;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-top:-12px;}
+.lobby-user-bar{display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 14px;font-family:var(--mono);font-size:11px;color:var(--text2);}
+.lobby-section-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding-bottom:8px;border-bottom:1px solid var(--border);}
+.lobby-empty{text-align:center;padding:40px 20px;color:var(--text3);font-family:var(--mono);font-size:12px;border:1px dashed var(--border);border-radius:var(--r);}
+.tournament-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:16px 20px;display:flex;align-items:center;gap:16px;transition:border-color .15s;margin-bottom:8px;}
+.tournament-card:hover{border-color:var(--accent);}
+.tc-name{font-size:14px;font-weight:700;}
+.tc-meta{font-family:var(--mono);font-size:10px;color:var(--text3);margin-top:3px;}
+.tc-status{display:inline-block;padding:2px 8px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:.06em;font-family:var(--mono);white-space:nowrap;}
+.tc-status.open{background:var(--green-bg);color:var(--green);border:1px solid rgba(0,208,132,.2);}
+.tc-status.closed{background:var(--gold-bg);color:var(--gold);border:1px solid rgba(255,184,48,.2);}
+.tc-status.liquidated{background:var(--bg4);color:var(--text3);border:1px solid var(--border2);}
