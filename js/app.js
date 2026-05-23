@@ -6,8 +6,8 @@
 // ── CONFIGURACIÓN SUPABASE ──────────────────────────────
 // Reemplazá con los valores de tu proyecto Supabase V2
 // Settings → API
-const SUPABASE_URL      = 'TU_SUPABASE_URL_V2';
-const SUPABASE_ANON_KEY = 'TU_SUPABASE_ANON_KEY_V2';
+const SUPABASE_URL      = 'https://ttvnskcianlbvfjjpang.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR0dm5za2NpYW5sYnZmampwYW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1MDcwNDMsImV4cCI6MjA5NTA4MzA0M30.IxO-NJkt0AS29s13_WoRcGNdctJEGcz0HzG-N8amwTo';
 
 const _CONFIGURED = !SUPABASE_URL.startsWith('TU_') && !SUPABASE_ANON_KEY.startsWith('TU_');
 const db = _CONFIGURED
