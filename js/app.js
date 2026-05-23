@@ -1182,6 +1182,48 @@ document.getElementById('order-modal').addEventListener('click', e => {
 });
 
 /* ═══════════════════════════════
+   DOWNLOAD CSV
+═══════════════════════════════ */
+function downloadTradesCSV(type) {
+  const q    = document.getElementById('hist-q').value.toLowerCase();
+  const cid  = document.getElementById('hist-country').value;
+  const side = document.getElementById('hist-side').value;
+  const u    = S.currentUser;
+  let headers, rows, filename;
+
+  if (type === 'global') {
+    let tr = S.trades.slice().reverse();
+    if (cid) tr = tr.filter(t => t.countryId === cid);
+    if (q)   tr = tr.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return (c && c.name.toLowerCase().includes(q)) || t.buyUserId.toLowerCase().includes(q) || t.sellUserId.toLowerCase().includes(q); });
+    headers  = ['Hora','Equipo','Ticker','Comprador','Vendedor','Cantidad','Precio (miles $)','Nocional Total','Estado'];
+    rows     = tr.map(t => {
+      const c = S.countries.find(x => x.id === t.countryId) || {};
+      return [fmtTS(t.ts), c.name || t.countryId, t.countryId, t.buyUserId, t.sellUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
+    });
+    filename = 'todos_los_trades.csv';
+  } else {
+    let mine = S.trades.slice().reverse().filter(t => t.buyUserId === u || t.sellUserId === u);
+    if (cid)  mine = mine.filter(t => t.countryId === cid);
+    if (side) mine = mine.filter(t => side === 'BUY' ? t.buyUserId === u : t.sellUserId === u);
+    if (q)    mine = mine.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return c && c.name.toLowerCase().includes(q); });
+    headers  = ['Hora','Equipo','Ticker','Lado','Contraparte','Cantidad','Precio (miles $)','Nocional','Estado'];
+    rows     = mine.map(t => {
+      const c = S.countries.find(x => x.id === t.countryId) || {};
+      const isBuy = t.buyUserId === u;
+      return [fmtTS(t.ts), c.name || t.countryId, t.countryId, isBuy ? 'COMPRE' : 'VENDI', isBuy ? t.sellUserId : t.buyUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
+    });
+    filename = 'mis_operaciones.csv';
+  }
+
+  const csv  = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ═══════════════════════════════
    CUSTOM SELECT (Pos. Final)
 ═══════════════════════════════ */
 function openCsel(btn, n) {

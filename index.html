@@ -182,14 +182,14 @@
     <div class="tab" id="htab-orders" onclick="switchHistTab('orders')" style="height:32px;font-size:10px;">Mis Órdenes Vivas</div>
   </div>
   <div class="card" id="hist-global-panel">
-    <div class="card-hd"><span class="card-title">Todos los Trades Ejecutados</span><span id="hist-global-count" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span></div>
+    <div class="card-hd"><span class="card-title">Todos los Trades Ejecutados</span><span id="hist-global-count" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span><button class="btn btn-xs btn-outline" onclick="downloadTradesCSV('global')" style="margin-left:auto;">⬇ Descargar CSV</button></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th class="L">Hora</th><th class="L">Equipo</th><th class="L">Comprador</th><th class="L">Vendedor</th><th>Cantidad</th><th>Precio/ctto<br><span style="font-weight:400;font-size:9px;">(en miles $)</span></th><th>Nocional Total</th><th>Estado</th></tr></thead>
       <tbody id="hist-global-tbody"></tbody>
     </table></div>
   </div>
   <div class="card" id="hist-mine-panel" style="display:none;">
-    <div class="card-hd"><span class="card-title">Mis Operaciones</span><span id="hist-mine-count" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span></div>
+    <div class="card-hd"><span class="card-title">Mis Operaciones</span><span id="hist-mine-count" style="font-family:var(--mono);font-size:10px;color:var(--text3);"></span><button class="btn btn-xs btn-outline" onclick="downloadTradesCSV('mine')" style="margin-left:auto;">⬇ Descargar CSV</button></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th class="L">Hora</th><th class="L">Equipo</th><th>Lado</th><th>Contraparte</th><th>Cantidad</th><th>Precio/ctto<br><span style="font-weight:400;font-size:9px;">(en miles $)</span></th><th>Nocional</th><th>Estado</th></tr></thead>
       <tbody id="hist-mine-tbody"></tbody>
