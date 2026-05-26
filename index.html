@@ -43,6 +43,29 @@
       ¿Primera vez? Usá <strong style="color:var(--text2);">Crear cuenta</strong> para registrarte.<br>
       El primer usuario en registrarse será administrador.
     </div>
+    <div style="text-align:center;margin-top:10px;">
+      <a href="#" onclick="showForgotPassword();return false;" style="font-size:11px;color:var(--text3);text-decoration:underline;">¿Olvidaste tu contraseña?</a>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD SCREEN -->
+<div id="reset-password-screen" class="hidden">
+  <div class="login-box">
+    <div class="login-logo">OTC<em>/</em>OPTIONS</div>
+    <div class="login-sub">Nueva contraseña</div>
+    <div class="form-row">
+      <label>Nueva contraseña</label>
+      <input type="password" id="rp-pass" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <div class="form-row">
+      <label>Confirmar contraseña</label>
+      <input type="password" id="rp-pass2" placeholder="••••••••" autocomplete="new-password">
+    </div>
+    <div id="rp-error" class="login-error"></div>
+    <button class="btn btn-primary" id="rp-submit" onclick="handlePasswordReset()" style="width:100%;padding:9px;font-size:12px;">
+      Guardar contraseña
+    </button>
   </div>
 </div>
 

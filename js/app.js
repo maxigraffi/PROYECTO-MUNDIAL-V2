@@ -1192,6 +1192,42 @@ let _loginTab = 'in';
 function showLoginScreen() { document.getElementById('login-screen').classList.remove('hidden'); }
 function hideLoginScreen() { document.getElementById('login-screen').classList.add('hidden'); }
 
+// ── Reset password screen ──
+function showResetScreen() {
+  hideLoginScreen();
+  document.getElementById('reset-password-screen').classList.remove('hidden');
+  document.getElementById('rp-pass').focus();
+}
+function hideResetScreen() {
+  document.getElementById('reset-password-screen').classList.add('hidden');
+}
+async function handlePasswordReset() {
+  const p1 = document.getElementById('rp-pass').value;
+  const p2 = document.getElementById('rp-pass2').value;
+  const err = document.getElementById('rp-error');
+  err.style.display = 'none';
+  if (!p1 || p1.length < 6) { err.textContent = 'La contraseña debe tener al menos 6 caracteres.'; err.style.display = ''; return; }
+  if (p1 !== p2) { err.textContent = 'Las contraseñas no coinciden.'; err.style.display = ''; return; }
+  const btn = document.getElementById('rp-submit');
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  const { error } = await db.auth.updateUser({ password: p1 });
+  btn.disabled = false; btn.textContent = 'Guardar contraseña';
+  if (error) { err.textContent = error.message; err.style.display = ''; return; }
+  hideResetScreen();
+  toast('Contraseña actualizada. Ingresá con tu nueva clave.', 'ok');
+  showLoginScreen();
+}
+async function showForgotPassword() {
+  const email = document.getElementById('l-email').value.trim();
+  if (!email) { _setLoginError('Ingresá tu email primero.'); return; }
+  const { error } = await db.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/',
+  });
+  if (error) { _setLoginError(error.message); return; }
+  _setLoginError('');
+  toast('¡Listo! Revisá tu email para el link de reset.', 'ok');
+}
+
 function switchLoginTab(tab) {
   _loginTab = tab;
   document.getElementById('ltab-in').classList.toggle('active', tab === 'in');
@@ -1524,6 +1560,15 @@ function openCsel(btn, n) {
     document.querySelector('#loading-overlay .loader-spinner').style.display = 'none';
     return;
   }
+
+  // Detectar token de reset de contraseña en la URL
+  db.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      hideLoading();
+      hideLoginScreen();
+      showResetScreen();
+    }
+  });
 
   try {
     const { data: { session } } = await db.auth.getSession();

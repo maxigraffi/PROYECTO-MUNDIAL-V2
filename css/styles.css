@@ -249,6 +249,8 @@ label{font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.05em;tex
 /* ── LOGIN SCREEN ── */
 #login-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;}
 #login-screen.hidden{display:none;}
+#reset-password-screen{position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;}
+#reset-password-screen.hidden{display:none;}
 .login-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:36px 32px;width:380px;max-width:95vw;display:flex;flex-direction:column;gap:16px;box-shadow:0 30px 80px rgba(0,0,0,.6);}
 .login-logo{font-family:var(--mono);font-size:22px;font-weight:700;color:var(--accent);letter-spacing:.1em;text-align:center;}
 .login-logo em{color:var(--text3);font-style:normal;font-weight:300;}
