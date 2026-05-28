@@ -268,6 +268,7 @@ async function loadState() {
     finalPos:     t.final_pos || null,
     displayOrder: t.display_order || 0,
     isHidden:     t.is_hidden || false,
+    groupLabel:   t.group_label || '',
   }));
 
   S.auctionPrices = Object.fromEntries(
@@ -774,7 +775,19 @@ function renderMarket() {
   const list = S.countries.filter(c => !c.isHidden && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)));
   document.getElementById('mkt-count').textContent = list.length + ' equipos';
   const disabled = S.gameState === 'closed' ? 'disabled' : '';
-  document.getElementById('market-panels').innerHTML = list.map(c => {
+  // Group by groupLabel (A-L); teams without group go last
+  const grouped = {};
+  list.forEach(c => {
+    const g = c.groupLabel || '';
+    if (!grouped[g]) grouped[g] = [];
+    grouped[g].push(c);
+  });
+  const groupKeys = Object.keys(grouped).sort((a, b) => {
+    if (!a) return 1; if (!b) return -1; return a.localeCompare(b);
+  });
+  const hasGroups = groupKeys.some(g => g !== '');
+
+  const panelHtml = c => {
     const bb = getBestBid(c.id), ba = getBestAsk(c.id), lt = getLastTrade(c.id), vol = getVolume(c.id);
     const isMeBid = bb && bb.userId === S.currentUser;
     const isMeAsk = ba && ba.userId === S.currentUser;
@@ -842,7 +855,14 @@ function renderMarket() {
         </div>
       </div>
     </div>`;
-  }).join('');
+  };
+
+  let panelsHtml = '';
+  groupKeys.forEach(g => {
+    if (hasGroups && g) panelsHtml += `<div class="market-group-header">🌐 Grupo ${g}</div>`;
+    panelsHtml += grouped[g].map(panelHtml).join('');
+  });
+  document.getElementById('market-panels').innerHTML = panelsHtml;
 }
 function togglePanel(cid) {
   const el = document.getElementById('cp-' + cid);
