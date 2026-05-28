@@ -36,6 +36,7 @@ const S = {
   trades:       [],
   settings:     { minQty: 1, maxQty: 5 },
   gameState:    'open',
+  propResults:  { goals: null, amarillas: null, rojas: null },
 
   // Usuario actual
   currentUser:  null,   // players.id (TEXT)
@@ -244,10 +245,18 @@ async function loadState() {
   const gs      = (settings || []).find(r => r.key === 'game_state');
   const minQCfg = (settings || []).find(r => r.key === 'min_qty');
   const maxQCfg = (settings || []).find(r => r.key === 'max_qty');
+  const goalsR  = (settings || []).find(r => r.key === 'goals_result');
+  const amarR   = (settings || []).find(r => r.key === 'amarillas_result');
+  const rojasR  = (settings || []).find(r => r.key === 'rojas_result');
 
   S.gameState         = gs      ? gs.value                : 'open';
   S.settings.minQty   = minQCfg ? parseInt(minQCfg.value) : 1;
   S.settings.maxQty   = maxQCfg ? parseInt(maxQCfg.value) : 5;
+  S.propResults = {
+    goals:     goalsR ? Number(goalsR.value)  : null,
+    amarillas: amarR  ? Number(amarR.value)   : null,
+    rojas:     rojasR ? Number(rojasR.value)  : null,
+  };
 
   S.users = (players).map(p => ({ id: p.id, name: p.name }));
 
@@ -270,15 +279,16 @@ async function loadState() {
   );
 
   S.orders = (orders || []).map(o => ({
-    id:        o.id,
-    ts:        new Date(o.created_at),
-    userId:    o.player_id,
-    countryId: o.team_id,
-    side:      o.side,
-    price:     parseFloat(o.price),
-    origQty:   o.orig_qty,
-    remQty:    o.rem_qty,
-    status:    o.status,
+    id:         o.id,
+    ts:         new Date(o.created_at),
+    userId:     o.player_id,
+    countryId:  o.team_id,
+    marketType: o.market_type || 'team',
+    side:       o.side,
+    price:      parseFloat(o.price),
+    origQty:    o.orig_qty,
+    remQty:     o.rem_qty,
+    status:     o.status,
   }));
 
   S.trades = (trades || []).map(t => ({
@@ -289,6 +299,7 @@ async function loadState() {
     buyUserId:   t.buyer_id,
     sellUserId:  t.seller_id,
     countryId:   t.team_id,
+    marketType:  t.market_type || 'team',
     qty:         t.qty,
     price:       parseFloat(t.price),
     annulled:    t.annulled,
@@ -432,6 +443,184 @@ async function matchOrders(cid) {
 
     matched = true;
   }
+}
+
+/* ═══════════════════════════════
+   PROP MARKETS (Goles / Amarillas / Rojas)
+═══════════════════════════════ */
+async function placePropOrder(marketType, side, price, qty) {
+  const min = S.settings.minQty, max = S.settings.maxQty;
+  if (qty < min || qty > max) return { ok: false, msg: `Cantidad entre ${fmtN(min)} y ${fmtN(max)} contratos` };
+  if (price <= 0) return { ok: false, msg: 'El precio debe ser mayor a 0' };
+  if (side === 'BUY') {
+    const ownAsk = S.orders.find(o => o.marketType === marketType && o.side === 'SELL' && o.status === 'live' && o.remQty > 0 && o.userId === S.currentUser && price >= o.price);
+    if (ownAsk) return { ok: false, msg: `Tu BID (${fmtP(price)}) cruzaría con tu propio ASK. No se permite self-trading.` };
+  } else {
+    const ownBid = S.orders.find(o => o.marketType === marketType && o.side === 'BUY' && o.status === 'live' && o.remQty > 0 && o.userId === S.currentUser && price <= o.price);
+    if (ownBid) return { ok: false, msg: `Tu ASK (${fmtP(price)}) cruzaría con tu propio BID. No se permite self-trading.` };
+  }
+  const { data: newOrder, error } = await db.from('orders').insert({
+    tournament_id: S.tournamentId,
+    player_id: S.currentUser, team_id: null, side,
+    market_type: marketType,
+    price: parseFloat(price), orig_qty: qty, rem_qty: qty,
+  }).select().single();
+  if (error) return { ok: false, msg: error.message };
+  const order = {
+    id: newOrder.id, ts: new Date(newOrder.created_at),
+    userId: S.currentUser, countryId: null, marketType, side,
+    price: parseFloat(price), origQty: qty, remQty: qty, status: 'live',
+  };
+  S.orders.push(order);
+  await matchPropOrders(marketType);
+  return { ok: true, order };
+}
+
+async function matchPropOrders(marketType) {
+  let matched = true;
+  while (matched) {
+    matched = false;
+    const bids = S.orders.filter(o => o.marketType === marketType && o.side === 'BUY' && o.status === 'live' && o.remQty > 0).sort((a, b) => b.price - a.price || a.ts - b.ts);
+    const asks = S.orders.filter(o => o.marketType === marketType && o.side === 'SELL' && o.status === 'live' && o.remQty > 0).sort((a, b) => a.price - b.price || a.ts - b.ts);
+    if (!bids.length || !asks.length) break;
+    let execBid = null, execAsk = null;
+    outer2: for (const bid of bids) {
+      for (const ask of asks) {
+        if (bid.price < ask.price) break;
+        if (bid.userId !== ask.userId) { execBid = bid; execAsk = ask; break outer2; }
+      }
+    }
+    if (!execBid) break;
+    const execPrice = execAsk.ts <= execBid.ts ? execAsk.price : execBid.price;
+    const execQty   = Math.min(execBid.remQty, execAsk.remQty);
+    execBid.remQty -= execQty; execAsk.remQty -= execQty;
+    if (execBid.remQty === 0) execBid.status = 'filled';
+    if (execAsk.remQty === 0) execAsk.status = 'filled';
+    const [, , { data: newTrade }] = await Promise.all([
+      db.from('orders').update({ rem_qty: execBid.remQty, status: execBid.status }).eq('id', execBid.id),
+      db.from('orders').update({ rem_qty: execAsk.remQty, status: execAsk.status }).eq('id', execAsk.id),
+      db.from('trades').insert({
+        tournament_id: S.tournamentId,
+        buy_order_id: execBid.id, sell_order_id: execAsk.id,
+        buyer_id: execBid.userId, seller_id: execAsk.userId,
+        team_id: null, qty: execQty, price: execPrice, market_type: marketType,
+      }).select().single(),
+    ]);
+    S.trades.push({
+      id: newTrade.id, ts: new Date(newTrade.created_at),
+      buyOrderId: execBid.id, sellOrderId: execAsk.id,
+      buyUserId: execBid.userId, sellUserId: execAsk.userId,
+      countryId: null, marketType, qty: execQty, price: execPrice, annulled: false,
+    });
+    matched = true;
+  }
+}
+
+async function submitPropOrder(marketType, side) {
+  if (S.gameState !== 'open') { toast('El mercado está cerrado', 'err'); return; }
+  const price = parseFloat(document.getElementById(`prop-price-${marketType}`).value);
+  const qty   = parseInt(document.getElementById(`prop-qty-${marketType}`).value);
+  if (isNaN(price) || price <= 0) { toast('Ingresá un precio válido', 'err'); return; }
+  if (isNaN(qty) || qty < 1) { toast('Ingresá una cantidad válida', 'err'); return; }
+  const r = await placePropOrder(marketType, side, price, qty);
+  if (!r.ok) { toast(r.msg, 'err'); return; }
+  toast(`Orden ${side === 'BUY' ? 'de compra' : 'de venta'} colocada`, 'ok');
+  renderProps();
+}
+
+async function savePropResults() {
+  const goals     = document.getElementById('prop-goals-result').value.trim();
+  const amarillas = document.getElementById('prop-amarillas-result').value.trim();
+  const rojas     = document.getElementById('prop-rojas-result').value.trim();
+  const upserts = [];
+  if (goals     !== '') upserts.push({ tournament_id: S.tournamentId, key: 'goals_result',     value: goals });
+  if (amarillas !== '') upserts.push({ tournament_id: S.tournamentId, key: 'amarillas_result', value: amarillas });
+  if (rojas     !== '') upserts.push({ tournament_id: S.tournamentId, key: 'rojas_result',     value: rojas });
+  if (!upserts.length) { toast('Ingresá al menos un resultado', 'err'); return; }
+  await Promise.all(upserts.map(u => db.from('game_settings').upsert(u, { onConflict: 'tournament_id,key' })));
+  if (goals     !== '') S.propResults.goals     = Number(goals);
+  if (amarillas !== '') S.propResults.amarillas = Number(amarillas);
+  if (rojas     !== '') S.propResults.rojas     = Number(rojas);
+  toast('Resultados guardados', 'ok');
+  renderAll();
+}
+
+function computePropLiquidation(marketType) {
+  const flows = {};
+  const result = S.propResults[marketType];
+  if (result == null) return flows;
+  S.trades.filter(t => !t.annulled && t.marketType === marketType).forEach(t => {
+    const diff = (result - t.price) * t.qty;
+    if (diff > 0)      addFlow(flows, t.sellUserId, t.buyUserId,  diff);
+    else if (diff < 0) addFlow(flows, t.buyUserId,  t.sellUserId, -diff);
+  });
+  return flows;
+}
+
+function getUserPropNetResult(userId, marketType) {
+  const result = S.propResults[marketType];
+  if (result == null) return null;
+  let total = 0;
+  S.trades.filter(t => !t.annulled && t.marketType === marketType).forEach(t => {
+    const diff = (result - t.price) * t.qty;
+    if (t.buyUserId  === userId) total += diff;
+    if (t.sellUserId === userId) total -= diff;
+  });
+  return total;
+}
+
+const PROP_MARKETS = [
+  { key: 'goals',     label: '⚽ Goles',             desc: 'Total de goles en el torneo',            color: 'var(--accent)' },
+  { key: 'amarillas', label: '🟨 Tarjetas Amarillas', desc: 'Total de tarjetas amarillas en el torneo', color: 'var(--gold)' },
+  { key: 'rojas',     label: '🟥 Tarjetas Rojas',    desc: 'Total de tarjetas rojas en el torneo',   color: 'var(--red)' },
+];
+
+function renderProps() {
+  const isOpen = S.gameState === 'open';
+  const u = S.currentUser;
+  let html = '';
+  PROP_MARKETS.forEach(m => {
+    const result    = S.propResults[m.key];
+    const liveOrds  = S.orders.filter(o => o.marketType === m.key && o.status === 'live' && o.remQty > 0);
+    const bids      = liveOrds.filter(o => o.side === 'BUY').sort((a,b) => b.price - a.price);
+    const asks      = liveOrds.filter(o => o.side === 'SELL').sort((a,b) => a.price - b.price);
+    const bestBid   = bids[0]?.price ?? null;
+    const bestAsk   = asks[0]?.price ?? null;
+    const myTrades  = S.trades.filter(t => t.marketType === m.key && !t.annulled);
+    let net = 0;
+    myTrades.forEach(t => { if (t.buyUserId === u) net += t.qty; if (t.sellUserId === u) net -= t.qty; });
+    const pnl = getUserPropNetResult(u, m.key);
+    html += `<div class="card prop-card">
+      <div class="card-hd">
+        <span class="card-title" style="color:${m.color}">${m.label}</span>
+        ${result != null ? `<span class="prop-result-badge">${result} ${m.key === 'goals' ? 'goles' : 'tarjetas'}</span>` : ''}
+        ${pnl != null ? `<span class="prop-pnl ${cls(pnl)}">${pnl >= 0 ? '+' : ''}${fmtM(pnl)}</span>` : ''}
+      </div>
+      <div class="prop-sub">${m.desc}</div>
+      <div class="prop-quotes">
+        <div class="prop-quote"><div class="pq-lbl">MEJOR COMPRA</div><div class="pq-val up">${bestBid != null ? fmtP(bestBid) : '—'}</div></div>
+        <div class="prop-quote"><div class="pq-lbl">MEJOR VENTA</div><div class="pq-val dn">${bestAsk != null ? fmtP(bestAsk) : '—'}</div></div>
+        <div class="prop-quote"><div class="pq-lbl">MI POSICIÓN NETA</div><div class="pq-val ${net > 0 ? 'up' : net < 0 ? 'dn' : 'muted'}">${net > 0 ? '+' : ''}${net}</div></div>
+      </div>
+      ${isOpen ? `<div class="prop-form">
+        <input type="number" id="prop-price-${m.key}" placeholder="Precio" style="width:80px;" step="0.01" min="0.01">
+        <input type="number" id="prop-qty-${m.key}" placeholder="Cant" style="width:55px;" min="${S.settings.minQty}" max="${S.settings.maxQty}" value="${S.settings.minQty}">
+        <button class="btn btn-xs prop-btn-buy" onclick="submitPropOrder('${m.key}','BUY')">▲ COMPRAR</button>
+        <button class="btn btn-xs prop-btn-sell" onclick="submitPropOrder('${m.key}','SELL')">▼ VENDER</button>
+      </div>` : `<div class="prop-form"><span class="muted" style="font-size:11px;">Mercado cerrado</span></div>`}
+      <div class="prop-book-grid">
+        <div class="prop-book-col">
+          <div class="prop-book-hd up">Compras</div>
+          ${bids.slice(0,6).map(o => `<div class="prop-book-row">${o.userId === u ? `<button class="btn-cancel-inline" onclick="cancelOrder('${o.id}')">✕</button>` : '<span class="prop-book-spacer"></span>'}<span class="up">${fmtP(o.price)}</span><span class="muted">${o.remQty}</span></div>`).join('') || '<div class="prop-book-empty">—</div>'}
+        </div>
+        <div class="prop-book-col">
+          <div class="prop-book-hd dn">Ventas</div>
+          ${asks.slice(0,6).map(o => `<div class="prop-book-row">${o.userId === u ? `<button class="btn-cancel-inline" onclick="cancelOrder('${o.id}')">✕</button>` : '<span class="prop-book-spacer"></span>'}<span class="dn">${fmtP(o.price)}</span><span class="muted">${o.remQty}</span></div>`).join('') || '<div class="prop-book-empty">—</div>'}
+        </div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('props-content').innerHTML = html;
 }
 
 async function cancelOrder(orderId) {
@@ -815,17 +1004,53 @@ function renderMyPos() {
   if (mtmRows.length) { mtmLbl.className = cls(mtmTotal); mtmLbl.textContent = (mtmTotal >= 0 ? '+' : '') + fmtM(mtmTotal) + ' PnL Total'; }
   else mtmLbl.textContent = '';
 
+  // Prop market P&L en Mi Posición
+  const propEl = document.getElementById('mypos-prop-section');
+  if (propEl) {
+    const propRows = PROP_MARKETS.map(m => {
+      const myTrades = S.trades.filter(t => t.marketType === m.key && !t.annulled);
+      let net = 0;
+      myTrades.forEach(t => { if (t.buyUserId === u) net += t.qty; if (t.sellUserId === u) net -= t.qty; });
+      if (!myTrades.some(t => t.buyUserId === u || t.sellUserId === u)) return null;
+      const pnl = getUserPropNetResult(u, m.key);
+      const result = S.propResults[m.key];
+      return `<tr>
+        <td class="L">${m.label}</td>
+        <td class="${net > 0 ? 'up' : net < 0 ? 'dn' : 'muted'}" style="font-weight:700;">${net > 0 ? '+' : ''}${net}</td>
+        <td>${result != null ? result : '<span class="muted">Pendiente</span>'}</td>
+        <td class="${pnl != null ? cls(pnl) : 'muted'}" style="font-weight:700;">${pnl != null ? (pnl >= 0 ? '+' : '') + fmtM(pnl) : '—'}</td>
+      </tr>`;
+    }).filter(Boolean);
+    propEl.innerHTML = propRows.length
+      ? `<table><thead><tr><th class="L">Mercado</th><th>Posición Neta</th><th>Resultado</th><th>P&L</th></tr></thead><tbody>${propRows.join('')}</tbody></table>`
+      : '<div class="info-banner" style="margin:0;">Sin posiciones en mercados especiales.</div>';
+  }
+
   const sw = document.getElementById('splitwise-section');
   if (S.gameState === 'closed') {
     const flows    = computeLiquidation();
     const owes     = Object.keys(flows).filter(k => k.startsWith(u + '>>')).map(k => ({ to: k.split('>>')[1], amt: flows[k] }));
     const receives = Object.keys(flows).filter(k => k.endsWith('>>' + u)).map(k => ({ from: k.split('>>')[0], amt: flows[k] }));
     const netResult = getUserNetResult(u);
+
+    // Prop settlements separados
+    const propSettleHtml = PROP_MARKETS.map(m => {
+      const pFlows = computePropLiquidation(m.key);
+      const pOwes = Object.keys(pFlows).filter(k => k.startsWith(u + '>>')).map(k => ({ to: k.split('>>')[1], amt: pFlows[k] }));
+      const pRecv = Object.keys(pFlows).filter(k => k.endsWith('>>' + u)).map(k => ({ from: k.split('>>')[0], amt: pFlows[k] }));
+      if (!pOwes.length && !pRecv.length) return '';
+      return `<div class="sw-card" style="border-color:var(--border2);">
+        <div class="sw-title">${m.label} — Saldo</div>
+        ${pOwes.map(x => `<div class="sw-row"><span>Debés a ${x.to}</span><span class="dn bold">${fmtM(x.amt)}</span></div>`).join('')}
+        ${pRecv.map(x => `<div class="sw-row"><span>Cobrás de ${x.from}</span><span class="up bold">${fmtM(x.amt)}</span></div>`).join('')}
+      </div>`;
+    }).join('');
+
     sw.innerHTML = `<div class="card">
-      <div class="card-hd"><span class="card-title">🔢 Estado de Cuenta Final</span></div>
+      <div class="card-hd"><span class="card-title">🔢 Estado de Cuenta Final — Mercado de Equipos</span></div>
       <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
         <div class="sw-card sw-net">
-          <div class="sw-title" style="color:var(--text2);">Resultado Neto</div>
+          <div class="sw-title" style="color:var(--text2);">Resultado Neto Equipos</div>
           <div style="font-family:var(--mono);font-size:20px;font-weight:700;" class="${cls(netResult)}">${netResult >= 0 ? '+' : ''}${fmtM(netResult)}</div>
           <div style="font-size:10px;color:var(--text3);margin-top:4px;">Prima cobrada − Prima pagada ± Premios</div>
         </div>
@@ -833,7 +1058,9 @@ function renderMyPos() {
         ${receives.length ? `<div class="sw-card sw-recv"><div class="sw-title" style="color:var(--green);">Tenés para cobrar de</div>${receives.map(x => `<div class="sw-row"><span>${x.from}</span><span class="up bold">${fmtM(x.amt)}</span></div>`).join('')}</div>` : ''}
         ${!owes.length && !receives.length ? '<div class="info-banner">No tenés saldos pendientes con otros jugadores.</div>' : ''}
       </div>
-    </div>`;
+    </div>
+    ${propSettleHtml ? `<div class="card" style="margin-top:10px;"><div class="card-hd"><span class="card-title">🎯 Estado de Cuenta — Mercados Especiales</span></div><div style="padding:14px;display:flex;flex-direction:column;gap:12px;">${propSettleHtml}</div></div>` : ''}`;
+
   } else {
     sw.innerHTML = '<div class="info-banner">Los saldos finales se calculan cuando el administrador liquida el torneo.</div>';
   }
@@ -920,6 +1147,14 @@ function renderAdmin() {
       <td class="${cls(p.net)}" style="font-weight:700;">${p.net > 0 ? '+' : ''}${fmtN(p.net)}</td>
     </tr>`;
   }).join('') || emptyRow(7, 'Sin posiciones abiertas');
+
+  // Pre-populate prop result inputs with saved values
+  const gEl = document.getElementById('prop-goals-result');
+  const aEl = document.getElementById('prop-amarillas-result');
+  const rEl = document.getElementById('prop-rojas-result');
+  if (gEl) gEl.value = S.propResults.goals     != null ? S.propResults.goals     : '';
+  if (aEl) aEl.value = S.propResults.amarillas  != null ? S.propResults.amarillas : '';
+  if (rEl) rEl.value = S.propResults.rojas      != null ? S.propResults.rojas     : '';
 }
 
 /* ═══════════════════════════════
@@ -1373,6 +1608,7 @@ function switchTab(el, name) {
   document.getElementById('view-' + name).classList.add('active');
   if (name === 'inicio')  renderInicio();
   if (name === 'market')  renderMarket();
+  if (name === 'props')   renderProps();
   if (name === 'history') renderHistory();
   if (name === 'mypos')   renderMyPos();
   if (name === 'admin')   renderAdmin();
@@ -1423,6 +1659,7 @@ function renderAll() {
   updateStatus();
   if (active === 'inicio')  renderInicio();
   if (active === 'market')  renderMarket();
+  if (active === 'props')   renderProps();
   if (active === 'history') renderHistory();
   if (active === 'mypos')   renderMyPos();
   if (active === 'admin')   renderAdmin();
