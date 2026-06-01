@@ -327,6 +327,11 @@
       <div style="padding:14px;display:flex;flex-direction:column;gap:12px;">
         <div class="form-row"><label>Min. contratos por orden</label><input type="number" id="cfg-min" value="1" min="1"></div>
         <div class="form-row"><label>Max. contratos por orden</label><input type="number" id="cfg-max" value="5" min="1"></div>
+        <div class="form-row">
+          <label>🔒 Código de acceso al torneo</label>
+          <input type="text" id="cfg-invite-code" placeholder="Ej: MUNDIAL2026 (vacío = sin código)" autocomplete="off">
+          <span style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:3px;">Si está vacío, cualquier usuario puede unirse libremente.</span>
+        </div>
         <div class="sep"></div>
         <div><button class="btn btn-outline btn-gold" onclick="liquidateTournament()">🏆 Liquidar Torneo</button></div>
         <div><button class="btn btn-outline" style="color:var(--red);border-color:var(--red);" onclick="resetGame()">↺ Nueva Partida</button></div>
@@ -503,6 +508,31 @@
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeCreateTournament()">Cancelar</button>
       <button class="btn btn-primary" id="ct-confirm" onclick="confirmCreateTournament()">Crear Torneo →</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVITE CODE MODAL -->
+<div class="modal-ov" id="invite-modal">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-hd">
+      <span class="modal-title">🔒 Código de acceso</span>
+      <button class="modal-x" onclick="closeInviteModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">
+        Para unirte a <strong id="ic-name" style="color:var(--text);"></strong> necesitás un código de acceso.
+      </div>
+      <div class="form-row">
+        <label>Código</label>
+        <input type="text" id="ic-code" placeholder="Ingresá el código..." autocomplete="off"
+          onkeydown="if(event.key==='Enter') confirmInviteCode()">
+      </div>
+      <div id="ic-error" class="login-error" style="display:none;margin-top:6px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeInviteModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmInviteCode()">Ingresar →</button>
     </div>
   </div>
 </div>

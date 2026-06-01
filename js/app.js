@@ -123,15 +123,54 @@ function tournamentCard(t, isMember) {
   const statusLabel = { open: 'ABIERTO', closed: 'CERRADO', liquidated: 'LIQUIDADO' }[t.status] || t.status;
   const btn = isMember
     ? `<button class="btn btn-sm btn-primary" onclick="enterTournament('${t.id}','${escHtml(t.name)}','${t.status}','${t.admin_id}')">Entrar →</button>`
-    : `<button class="btn btn-sm btn-outline" onclick="joinAndEnterTournament('${t.id}','${escHtml(t.name)}','${t.status}','${t.admin_id}')">Unirse</button>`;
+    : t.invite_code
+      ? `<button class="btn btn-sm btn-outline" onclick="promptInviteCode('${t.id}','${escHtml(t.name)}','${t.status}','${t.admin_id}')">🔒 Unirse</button>`
+      : `<button class="btn btn-sm btn-outline" onclick="joinAndEnterTournament('${t.id}','${escHtml(t.name)}','${t.status}','${t.admin_id}')">Unirse</button>`;
+  const lockBadge = (!isMember && t.invite_code) ? `<span style="font-size:9px;font-family:var(--mono);color:var(--text3);margin-left:6px;">🔒 Con código</span>` : '';
   return `<div class="tournament-card">
     <div style="flex:1;">
-      <div class="tc-name">${escHtml(t.name)}</div>
+      <div class="tc-name">${escHtml(t.name)}${lockBadge}</div>
       <div class="tc-meta">Admin: ${t.admin_id || '—'} &nbsp;·&nbsp; Creado: ${new Date(t.created_at).toLocaleDateString('es-AR')}</div>
     </div>
     <span class="tc-status ${t.status}">${statusLabel}</span>
     ${btn}
   </div>`;
+}
+
+// ── INVITE CODE ─────────────────────────────────────────
+let _inviteTarget = null;
+
+function promptInviteCode(tid, name, status, adminId) {
+  _inviteTarget = { tid, name, status, adminId };
+  document.getElementById('ic-name').textContent = name;
+  document.getElementById('ic-code').value = '';
+  const err = document.getElementById('ic-error');
+  err.textContent = ''; err.style.display = 'none';
+  document.getElementById('invite-modal').classList.add('open');
+  setTimeout(() => document.getElementById('ic-code').focus(), 100);
+}
+
+function closeInviteModal() {
+  document.getElementById('invite-modal').classList.remove('open');
+  _inviteTarget = null;
+}
+
+async function confirmInviteCode() {
+  const code = document.getElementById('ic-code').value.trim();
+  if (!code) { showIcError('Ingresá el código de acceso'); return; }
+  const t = S.tournaments.find(x => x.id === _inviteTarget?.tid);
+  if (!t) return;
+  if (t.invite_code && code.toLowerCase() !== t.invite_code.toLowerCase()) {
+    showIcError('Código incorrecto — intentá de nuevo'); return;
+  }
+  closeInviteModal();
+  const { tid, name, status, adminId } = _inviteTarget || {};
+  await joinAndEnterTournament(tid, name, status, adminId);
+}
+
+function showIcError(msg) {
+  const el = document.getElementById('ic-error');
+  el.textContent = msg; el.style.display = 'block';
 }
 
 async function joinAndEnterTournament(tid, name, status, adminId) {
@@ -1124,6 +1163,9 @@ function renderAdmin() {
   ).join('');
   document.getElementById('cfg-min').value = S.settings.minQty;
   document.getElementById('cfg-max').value = S.settings.maxQty;
+  const tCurrent = S.tournaments.find(t => t.id === S.tournamentId);
+  const icEl = document.getElementById('cfg-invite-code');
+  if (icEl) icEl.value = tCurrent?.invite_code || '';
   document.getElementById('admin-c-tbody').innerHTML = S.countries.map((c, i) =>
     `<tr style="${c.isHidden ? 'opacity:0.45;' : ''}">
       <td class="L"><input type="text" id="ac-${i}-flag" value="${c.flag}" style="width:50px;text-align:center;"></td>
@@ -1376,10 +1418,10 @@ async function savePrizes() {
   renderAll();
 }
 async function saveSettings() {
-  const minQ = parseInt(document.getElementById('cfg-min')?.value) || 1;
-  const maxQ = parseInt(document.getElementById('cfg-max')?.value) || 5;
+  const minQ       = parseInt(document.getElementById('cfg-min')?.value) || 1;
+  const maxQ       = parseInt(document.getElementById('cfg-max')?.value) || 5;
+  const inviteCode = (document.getElementById('cfg-invite-code')?.value || '').trim() || null;
   S.settings.minQty = minQ;
-  S.settings.maxQty = maxQ;
   await Promise.all([
     db.from('game_settings').upsert(
       { tournament_id: S.tournamentId, key: 'min_qty', value: String(minQ) },
@@ -1389,6 +1431,7 @@ async function saveSettings() {
       { tournament_id: S.tournamentId, key: 'max_qty', value: String(maxQ) },
       { onConflict: 'tournament_id,key' }
     ),
+    db.from('tournaments').update({ invite_code: inviteCode }).eq('id', S.tournamentId),
   ]);
   toast('Configuración guardada', 'ok');
 }
