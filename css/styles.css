@@ -286,8 +286,13 @@ label{font-size:10px;color:var(--text2);font-weight:600;letter-spacing:.05em;tex
 .tc-status.liquidated{background:var(--bg4);color:var(--text3);border:1px solid var(--border2);}
 
 /* ── MARKET GROUP HEADER ── */
-.market-group-header{display:flex;align-items:center;gap:10px;padding:8px 14px;margin-top:10px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);}
-.market-group-header:first-child{margin-top:0;}
+.market-group-wrap{margin-bottom:6px;}
+.market-group-header{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);cursor:pointer;user-select:none;transition:border-color .15s,background .15s;}
+.market-group-header:hover{border-color:var(--gold);background:var(--bg4);}
+.mg-count{font-size:10px;font-weight:400;color:var(--text3);margin-left:4px;}
+.mg-chevron{margin-left:auto;font-size:12px;color:var(--text3);transition:transform .2s;}
+.market-group-body{display:none;padding-top:4px;}
+.market-group-body.open{display:block;}
 
 /* ── PROP MARKETS ── */
 .prop-card{display:flex;flex-direction:column;gap:10px;}

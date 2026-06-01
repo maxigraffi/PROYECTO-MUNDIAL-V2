@@ -859,14 +859,37 @@ function renderMarket() {
 
   let panelsHtml = '';
   groupKeys.forEach(g => {
-    if (hasGroups && g) panelsHtml += `<div class="market-group-header">🌐 Grupo ${g}</div>`;
-    panelsHtml += grouped[g].map(panelHtml).join('');
+    if (hasGroups && g) {
+      panelsHtml += `
+        <div class="market-group-wrap">
+          <div class="market-group-header" onclick="toggleMarketGroup('${g}')">
+            <span>🌐 Grupo ${g}</span>
+            <span class="mg-count">${grouped[g].length} equipos</span>
+            <span class="mg-chevron">▾</span>
+          </div>
+          <div class="market-group-body" id="mg-${g}">
+            ${grouped[g].map(panelHtml).join('')}
+          </div>
+        </div>`;
+    } else {
+      panelsHtml += grouped[g].map(panelHtml).join('');
+    }
   });
   document.getElementById('market-panels').innerHTML = panelsHtml;
 }
 function togglePanel(cid) {
   const el = document.getElementById('cp-' + cid);
   if (el) el.classList.toggle('open');
+}
+function toggleMarketGroup(g) {
+  const body = document.getElementById('mg-' + g);
+  if (!body) return;
+  const isOpen = body.classList.toggle('open');
+  const header = body.previousElementSibling;
+  if (header) {
+    const chevron = header.querySelector('.mg-chevron');
+    if (chevron) chevron.textContent = isOpen ? '▴' : '▾';
+  }
 }
 
 /* ═══════════════════════════════
