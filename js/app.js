@@ -610,9 +610,9 @@ function getUserPropNetResult(userId, marketType) {
 }
 
 const PROP_MARKETS = [
-  { key: 'goals',     label: '⚽ Goles',             desc: 'Total de goles en el torneo',            color: 'var(--accent)' },
-  { key: 'amarillas', label: '🟨 Tarjetas Amarillas', desc: 'Total de tarjetas amarillas en el torneo', color: 'var(--gold)' },
-  { key: 'rojas',     label: '🟥 Tarjetas Rojas',    desc: 'Total de tarjetas rojas en el torneo',   color: 'var(--red)' },
+  { key: 'goals',     label: '⚽ Goles',             shortLabel: '⚽ Goles',     desc: 'Total de goles en el torneo',            color: 'var(--accent)' },
+  { key: 'amarillas', label: '🟨 Tarjetas Amarillas', shortLabel: '🟨 Amarillas', desc: 'Total de tarjetas amarillas en el torneo', color: 'var(--gold)' },
+  { key: 'rojas',     label: '🟥 Tarjetas Rojas',    shortLabel: '🟥 Rojas',     desc: 'Total de tarjetas rojas en el torneo',   color: 'var(--red)' },
 ];
 
 function renderProps() {
@@ -777,7 +777,7 @@ function cls(n)   { return n > 0 ? 'up' : n < 0 ? 'dn' : 'muted'; }
 function tradeMarketLabel(t) {
   if (t.marketType && t.marketType !== 'team') {
     const m = PROP_MARKETS.find(m => m.key === t.marketType);
-    return m ? m.label : t.marketType;
+    return m ? m.shortLabel : t.marketType;
   }
   const c = S.countries.find(x => x.id === t.countryId);
   return c ? (c.flag + ' ' + c.name) : '—';
@@ -785,7 +785,7 @@ function tradeMarketLabel(t) {
 function orderMarketLabel(o) {
   if (o.marketType && o.marketType !== 'team') {
     const m = PROP_MARKETS.find(m => m.key === o.marketType);
-    return m ? m.label : o.marketType;
+    return m ? m.shortLabel : o.marketType;
   }
   const c = S.countries.find(x => x.id === o.countryId);
   return c ? (c.flag + ' ' + c.name) : '—';
