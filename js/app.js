@@ -774,6 +774,22 @@ function fmtP(n)  { if (n == null) return '—'; return '$' + parseFloat(n).toFi
 function fmtN(n)  { return Math.round(n).toLocaleString('es-AR'); }
 function fmtTS(d) { return d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }); }
 function cls(n)   { return n > 0 ? 'up' : n < 0 ? 'dn' : 'muted'; }
+function tradeMarketLabel(t) {
+  if (t.marketType && t.marketType !== 'team') {
+    const m = PROP_MARKETS.find(m => m.key === t.marketType);
+    return m ? m.label : t.marketType;
+  }
+  const c = S.countries.find(x => x.id === t.countryId);
+  return c ? (c.flag + ' ' + c.name) : '—';
+}
+function orderMarketLabel(o) {
+  if (o.marketType && o.marketType !== 'team') {
+    const m = PROP_MARKETS.find(m => m.key === o.marketType);
+    return m ? m.label : o.marketType;
+  }
+  const c = S.countries.find(x => x.id === o.countryId);
+  return c ? (c.flag + ' ' + c.name) : '—';
+}
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 /* ═══════════════════════════════
@@ -963,13 +979,11 @@ function renderHistory() {
     return (c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q))) ||
            t.buyUserId.toLowerCase().includes(q) || t.sellUserId.toLowerCase().includes(q);
   });
-  const nameOf = cid => { const c = S.countries.find(x => x.id === cid); return c ? c.flag + ' ' + c.name : cid; };
   document.getElementById('hist-global-count').textContent = tr.length + ' trades';
   document.getElementById('hist-global-tbody').innerHTML = tr.map(t => {
-    const c = S.countries.find(x => x.id === t.countryId) || {};
     return `<tr class="hover-row ${t.annulled ? 'tag-annulled' : ''}">
       <td class="L" style="font-family:var(--mono);font-size:10px;color:var(--text3);">${fmtTS(t.ts)}</td>
-      <td class="L">${c.flag || ''} ${c.name || nameOf(t.countryId)}</td>
+      <td class="L">${tradeMarketLabel(t)}</td>
       <td class="L" style="color:var(--green);font-family:var(--mono);">${t.buyUserId}</td>
       <td class="L" style="color:var(--red);font-family:var(--mono);">${t.sellUserId}</td>
       <td>${fmtN(t.qty)}</td>
@@ -985,11 +999,10 @@ function renderHistory() {
   if (q)    mine = mine.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)); });
   document.getElementById('hist-mine-count').textContent = mine.length + ' operaciones';
   document.getElementById('hist-mine-tbody').innerHTML = mine.map(t => {
-    const c = S.countries.find(x => x.id === t.countryId) || {};
     const isBuy = t.buyUserId === u;
     return `<tr class="hover-row ${t.annulled ? 'tag-annulled' : ''}">
       <td class="L" style="font-family:var(--mono);font-size:10px;color:var(--text3);">${fmtTS(t.ts)}</td>
-      <td class="L">${c.flag || ''} ${c.name || t.countryId}</td>
+      <td class="L">${tradeMarketLabel(t)}</td>
       <td>${isBuy ? '<span class="badge b-buy">COMPRÉ</span>' : '<span class="badge b-sell">VENDÍ</span>'}</td>
       <td style="font-family:var(--mono);font-size:11px;color:var(--text2);">${isBuy ? t.sellUserId : t.buyUserId}</td>
       <td>${fmtN(t.qty)}</td>
@@ -1002,10 +1015,9 @@ function renderHistory() {
   if (cid) myOrds = myOrds.filter(o => o.countryId === cid);
   document.getElementById('hist-orders-count').textContent = myOrds.length + ' activas';
   document.getElementById('hist-orders-tbody').innerHTML = myOrds.map(o => {
-    const c = S.countries.find(x => x.id === o.countryId) || {};
     return `<tr class="hover-row">
       <td class="L" style="font-family:var(--mono);font-size:10px;color:var(--text3);">${fmtTS(o.ts)}</td>
-      <td class="L">${c.flag || ''} ${c.name || o.countryId}</td>
+      <td class="L">${orderMarketLabel(o)}</td>
       <td>${o.side === 'BUY' ? '<span class="badge b-buy">BID</span>' : '<span class="badge b-sell">ASK</span>'}</td>
       <td style="font-family:var(--mono);font-weight:700;">${fmtP(o.price)}</td>
       <td>${fmtN(o.origQty)}</td>
@@ -1197,21 +1209,19 @@ function renderAdmin() {
   }).join('');
   const liveOrds = S.orders.filter(o => o.status === 'live' && o.remQty > 0);
   document.getElementById('admin-orders-tbody').innerHTML = liveOrds.map(o => {
-    const c = S.countries.find(x => x.id === o.countryId) || {};
     return `<tr class="hover-row">
       <td class="L" style="font-family:var(--mono);font-size:10px;color:var(--text3);">${fmtTS(o.ts)}</td>
       <td class="L" style="font-family:var(--mono);color:var(--text2);">${o.userId}</td>
-      <td class="L">${c.flag || ''} ${c.name || o.countryId}</td>
+      <td class="L">${orderMarketLabel(o)}</td>
       <td>${o.side === 'BUY' ? '<span class="badge b-buy">BID</span>' : '<span class="badge b-sell">ASK</span>'}</td>
       <td>${fmtP(o.price)}</td><td>${fmtN(o.remQty)}</td>
       <td><button class="btn btn-xs btn-red" onclick="adminCancelOrder('${o.id}')">Cancelar</button></td>
     </tr>`;
   }).join('') || emptyRow(7);
   document.getElementById('admin-trades-tbody').innerHTML = S.trades.slice().reverse().map(t => {
-    const c = S.countries.find(x => x.id === t.countryId) || {};
     return `<tr class="hover-row ${t.annulled ? 'tag-annulled' : ''}">
       <td class="L" style="font-family:var(--mono);font-size:10px;color:var(--text3);">${fmtTS(t.ts)}</td>
-      <td class="L">${c.flag || ''} ${c.name || t.countryId}</td>
+      <td class="L">${tradeMarketLabel(t)}</td>
       <td class="L" style="color:var(--green);font-family:var(--mono);">${t.buyUserId}</td>
       <td class="L" style="color:var(--red);font-family:var(--mono);">${t.sellUserId}</td>
       <td>${fmtN(t.qty)}</td><td>${fmtP(t.price)}</td>
