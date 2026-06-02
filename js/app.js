@@ -1103,20 +1103,27 @@ function renderMyPos() {
   if (propEl) {
     const propRows = PROP_MARKETS.map(m => {
       const myTrades = S.trades.filter(t => t.marketType === m.key && !t.annulled);
-      let net = 0;
-      myTrades.forEach(t => { if (t.buyUserId === u) net += t.qty; if (t.sellUserId === u) net -= t.qty; });
       if (!myTrades.some(t => t.buyUserId === u || t.sellUserId === u)) return null;
+      let net = 0, buyQty = 0, buyTotal = 0, sellQty = 0, sellTotal = 0;
+      myTrades.forEach(t => {
+        if (t.buyUserId  === u) { net += t.qty; buyQty  += t.qty; buyTotal  += t.qty * t.price; }
+        if (t.sellUserId === u) { net -= t.qty; sellQty += t.qty; sellTotal += t.qty * t.price; }
+      });
+      const avgBuy  = buyQty  > 0 ? buyTotal  / buyQty  : null;
+      const avgSell = sellQty > 0 ? sellTotal / sellQty : null;
       const pnl = getUserPropNetResult(u, m.key);
       const result = S.propResults[m.key];
       return `<tr>
         <td class="L">${m.label}</td>
         <td class="${net > 0 ? 'up' : net < 0 ? 'dn' : 'muted'}" style="font-weight:700;">${net > 0 ? '+' : ''}${net}</td>
+        <td style="font-family:var(--mono);">${avgBuy  != null ? fmtP(avgBuy)  : '<span class="muted">—</span>'}</td>
+        <td style="font-family:var(--mono);">${avgSell != null ? fmtP(avgSell) : '<span class="muted">—</span>'}</td>
         <td>${result != null ? result : '<span class="muted">Pendiente</span>'}</td>
         <td class="${pnl != null ? cls(pnl) : 'muted'}" style="font-weight:700;">${pnl != null ? (pnl >= 0 ? '+' : '') + fmtM(pnl) : '—'}</td>
       </tr>`;
     }).filter(Boolean);
     propEl.innerHTML = propRows.length
-      ? `<table><thead><tr><th class="L">Mercado</th><th>Posición Neta</th><th>Resultado</th><th>P&L</th></tr></thead><tbody>${propRows.join('')}</tbody></table>`
+      ? `<table><thead><tr><th class="L">Mercado</th><th>Pos. Neta</th><th>PPP Compra</th><th>PPP Venta</th><th>Resultado</th><th>P&L</th></tr></thead><tbody>${propRows.join('')}</tbody></table>`
       : '<div class="info-banner" style="margin:0;">Sin posiciones en mercados especiales.</div>';
   }
 
