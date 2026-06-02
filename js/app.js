@@ -824,6 +824,10 @@ function renderInicio() {
    RENDER — MARKET
 ═══════════════════════════════ */
 function renderMarket() {
+  // Remember which groups are open before re-rendering
+  const openGroups = new Set(
+    [...document.querySelectorAll('.market-group-body.open')].map(el => el.id.replace('mg-', ''))
+  );
   const q  = document.getElementById('mkt-search').value.toLowerCase();
   const mp = maxPrice();
   document.getElementById('mkt-maxprice-lbl').textContent = `Precio máx: ${fmtP(mp)}`;
@@ -931,6 +935,16 @@ function renderMarket() {
     }
   });
   document.getElementById('market-panels').innerHTML = panelsHtml;
+
+  // Restore open groups
+  openGroups.forEach(g => {
+    const body = document.getElementById('mg-' + g);
+    if (body) {
+      body.classList.add('open');
+      const chevron = body.previousElementSibling?.querySelector('.mg-chevron');
+      if (chevron) chevron.textContent = '▴';
+    }
+  });
 }
 function togglePanel(cid) {
   const el = document.getElementById('cp-' + cid);
