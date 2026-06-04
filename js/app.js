@@ -897,8 +897,7 @@ function renderMarket() {
     }).join('') || '<div class="ob-empty">Sin órdenes</div>';
     return `<div class="country-panel">
       <div class="country-panel-hd" onclick="togglePanel('${c.id}')">
-        <span class="cp-flag">${c.flag}</span>
-        <div style="min-width:130px;flex-shrink:0;"><div class="cp-name">${c.name}</div><div class="cp-ticker">${c.ticker}</div></div>
+        <div style="min-width:150px;flex-shrink:0;"><div class="cp-name">${c.flag} ${c.name}</div><div class="cp-ticker">${c.ticker}</div></div>
         <div style="flex:1;display:flex;justify-content:center;gap:16px;align-items:center;" onclick="event.stopPropagation()">
           <div style="display:flex;gap:3px;align-items:center;">
             <input type="number" id="bp-${c.id}" placeholder="Precio" min="0.01" step="0.01" style="width:68px;padding:3px 6px;font-size:11px;" ${disabled} onfocus="showPriceHint('${c.id}','BUY')">
