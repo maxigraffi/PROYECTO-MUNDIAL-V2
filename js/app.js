@@ -381,12 +381,12 @@ function setupRealtime() {
    PRIZE TIERS
 ═══════════════════════════════ */
 const PRIZE_TIERS = [
-  { pos: 1, label: 'Campeón',      medal: '🥇', range: [1,1],  pct: 35 },
-  { pos: 2, label: 'Subcampeón',   medal: '🥈', range: [2,2],  pct: 25 },
-  { pos: 3, label: '3er Puesto',   medal: '🥉', range: [3,3],  pct: 15 },
-  { pos: 4, label: '4° Puesto',    medal: '4️⃣', range: [4,4],  pct: 10 },
-  { pos: 5, label: 'Puestos 5-8',  medal: '🏅', range: [5,8],  pct: 10 },
-  { pos: 9, label: 'Puestos 9-16', medal: '🎖️', range: [9,16], pct: 5  },
+  { pos: 1, label: 'Campeón',      medal: '🥇', range: [1,1],  pct: 35,   perTeam: false },
+  { pos: 2, label: 'Subcampeón',   medal: '🥈', range: [2,2],  pct: 20,   perTeam: false },
+  { pos: 3, label: '3er Puesto',   medal: '🥉', range: [3,3],  pct: 15,   perTeam: false },
+  { pos: 4, label: '4° Puesto',    medal: '4️⃣', range: [4,4],  pct: 8,    perTeam: false },
+  { pos: 5, label: 'Puestos 5-8',  medal: '🏅', range: [5,8],  pct: 3,    perTeam: true  },
+  { pos: 9, label: 'Puestos 9-16', medal: '🎖️', range: [9,16], pct: 1.25, perTeam: true  },
 ];
 
 function getPrizeForPosition(pos) {
@@ -1222,8 +1222,8 @@ function renderAdmin() {
       return `<div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:16px;width:24px;text-align:center;">${t.medal}</span>
         <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:110px;">${t.label}</span>
-        <input type="number" id="pr-pct-${t.pos}" value="${pct}" min="0" max="100" step="0.5" style="width:65px;text-align:center;" oninput="calcPrizesFromPct()">
-        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">%  =</span>
+        <input type="number" id="pr-pct-${t.pos}" value="${pct}" min="0" max="100" step="0.25" style="width:65px;text-align:center;" oninput="calcPrizesFromPct()">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">${t.perTeam ? '% c/u =' : '%     ='}</span>
         <input type="number" id="pr-amt-${t.pos}" value="${amt}" min="0" step="1000" style="width:130px;background:var(--bg4);color:var(--text2);" readonly>
       </div>`;
     }).join('')}
