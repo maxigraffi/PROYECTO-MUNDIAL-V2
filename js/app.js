@@ -1679,6 +1679,12 @@ async function handleAuth() {
 }
 
 async function _doSignIn(email, pass) {
+  // Si ya hay sesión activa para este usuario, usarla directamente
+  const { data: { session } } = await db.auth.getSession();
+  if (session && session.user.email === email) {
+    await _afterAuth(session.user);
+    return;
+  }
   const { data, error } = await db.auth.signInWithPassword({ email, password: pass });
   if (error) { _setLoginError('Email o contraseña incorrectos.'); return; }
   await _afterAuth(data.user);
@@ -1987,24 +1993,17 @@ function openCsel(btn, n) {
   });
 
   try {
-    const { data: { session } } = await db.auth.getSession();
+    // Procesar sesión (necesario para que funcione el recovery de contraseña)
+    await db.auth.getSession();
 
-    if (session) {
-      const { data: player } = await db.from('players')
-        .select('*').eq('auth_user_id', session.user.id).single();
-      if (player) {
-        _setCurrentPlayer(player);
-        await loadTournaments();
-        hideLoading();
-        showLobby();
-        renderLobby();
-        return;
-      }
-      await db.auth.signOut();
+    // Dar tiempo a que el evento PASSWORD_RECOVERY dispare si aplica
+    await new Promise(r => setTimeout(r, 80));
+
+    // Siempre pedir login al abrir la página, salvo que ya estemos en el reset screen
+    if (document.getElementById('reset-password-screen').classList.contains('hidden')) {
+      hideLoading();
+      showLoginScreen();
     }
-
-    hideLoading();
-    showLoginScreen();
   } catch (err) {
     console.error(err);
     document.querySelector('#loading-overlay .loader-msg').textContent =
