@@ -940,7 +940,7 @@ function renderMarket() {
   let panelsHtml = '';
   groupKeys.forEach(g => {
     if (hasGroups && g) {
-      const teamNames = grouped[g].map(c => `${c.flag} ${c.name}`).join(' · ');
+      const teamNames = grouped[g].map(c => c.name).join(' · ');
       panelsHtml += `
         <div class="market-group-wrap">
           <div class="market-group-header" onclick="toggleMarketGroup('${g}')">
