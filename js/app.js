@@ -941,10 +941,12 @@ function renderMarket() {
   let panelsHtml = '';
   groupKeys.forEach(g => {
     if (hasGroups && g) {
+      const teamNames = grouped[g].map(c => `${c.flag} ${c.name}`).join(' · ');
       panelsHtml += `
         <div class="market-group-wrap">
           <div class="market-group-header" onclick="toggleMarketGroup('${g}')">
             <span>🌐 Grupo ${g}</span>
+            <span class="mg-teams">${teamNames}</span>
             <span class="mg-count">${grouped[g].length} equipos</span>
             <span class="mg-chevron">▾</span>
           </div>
