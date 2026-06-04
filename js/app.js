@@ -281,16 +281,20 @@ async function loadState() {
     players = pd || [];
   }
 
-  const gs      = (settings || []).find(r => r.key === 'game_state');
-  const minQCfg = (settings || []).find(r => r.key === 'min_qty');
-  const maxQCfg = (settings || []).find(r => r.key === 'max_qty');
-  const goalsR  = (settings || []).find(r => r.key === 'goals_result');
-  const amarR   = (settings || []).find(r => r.key === 'amarillas_result');
-  const rojasR  = (settings || []).find(r => r.key === 'rojas_result');
+  const gs         = (settings || []).find(r => r.key === 'game_state');
+  const minQCfg    = (settings || []).find(r => r.key === 'min_qty');
+  const maxQCfg    = (settings || []).find(r => r.key === 'max_qty');
+  const goalsR     = (settings || []).find(r => r.key === 'goals_result');
+  const amarR      = (settings || []).find(r => r.key === 'amarillas_result');
+  const rojasR     = (settings || []).find(r => r.key === 'rojas_result');
+  const prizePcts  = (settings || []).find(r => r.key === 'prize_pcts');
+  const prizeTotal = (settings || []).find(r => r.key === 'prize_total');
 
-  S.gameState         = gs      ? gs.value                : 'open';
-  S.settings.minQty   = minQCfg ? parseInt(minQCfg.value) : 1;
-  S.settings.maxQty   = maxQCfg ? parseInt(maxQCfg.value) : 5;
+  S.gameState            = gs         ? gs.value                : 'open';
+  S.settings.minQty      = minQCfg    ? parseInt(minQCfg.value) : 1;
+  S.settings.maxQty      = maxQCfg    ? parseInt(maxQCfg.value) : 5;
+  S.settings._prizePcts  = prizePcts  ? prizePcts.value         : null;
+  S.settings._prizeTotal = prizeTotal ? prizeTotal.value        : '';
   S.propResults = {
     goals:     goalsR ? Number(goalsR.value)  : null,
     amarillas: amarR  ? Number(amarR.value)   : null,
@@ -377,12 +381,12 @@ function setupRealtime() {
    PRIZE TIERS
 ═══════════════════════════════ */
 const PRIZE_TIERS = [
-  { pos: 1, label: 'Campeón',      medal: '🥇', range: [1,1]   },
-  { pos: 2, label: 'Subcampeón',   medal: '🥈', range: [2,2]   },
-  { pos: 3, label: '3er Puesto',   medal: '🥉', range: [3,3]   },
-  { pos: 4, label: '4° Puesto',    medal: '4️⃣', range: [4,4]   },
-  { pos: 5, label: 'Puestos 5-8',  medal: '🏅', range: [5,8]   },
-  { pos: 9, label: 'Puestos 9-16', medal: '🎖️', range: [9,16]  },
+  { pos: 1, label: 'Campeón',      medal: '🥇', range: [1,1],  pct: 35 },
+  { pos: 2, label: 'Subcampeón',   medal: '🥈', range: [2,2],  pct: 25 },
+  { pos: 3, label: '3er Puesto',   medal: '🥉', range: [3,3],  pct: 15 },
+  { pos: 4, label: '4° Puesto',    medal: '4️⃣', range: [4,4],  pct: 10 },
+  { pos: 5, label: 'Puestos 5-8',  medal: '🏅', range: [5,8],  pct: 10 },
+  { pos: 9, label: 'Puestos 9-16', medal: '🎖️', range: [9,16], pct: 5  },
 ];
 
 function getPrizeForPosition(pos) {
@@ -1204,13 +1208,26 @@ function renderMyPos() {
    RENDER — ADMIN
 ═══════════════════════════════ */
 function renderAdmin() {
-  document.getElementById('prize-inputs').innerHTML = PRIZE_TIERS.map(t =>
-    `<div style="display:flex;align-items:center;gap:8px;">
-      <span style="font-size:16px;width:24px;text-align:center;">${t.medal}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:110px;">${t.label}</span>
-      <input type="number" id="pr-${t.pos}" value="${S.prizeTable[t.pos] || 0}" min="0" step="1000" style="width:120px;">
-    </div>`
-  ).join('');
+  // Load saved percentages and total
+  const savedPcts = (() => { try { const s = S.settings._prizePcts; return s ? JSON.parse(s) : {}; } catch(e) { return {}; } })();
+  const savedTotal = S.settings._prizeTotal || '';
+  document.getElementById('prize-inputs').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px;">
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:140px;">💰 Total del pozo</span>
+      <input type="number" id="pr-total" value="${savedTotal}" min="0" step="1000" style="width:140px;" oninput="calcPrizesFromPct()" placeholder="Ej: 1000000">
+    </div>
+    ${PRIZE_TIERS.map(t => {
+      const pct = savedPcts[t.pos] ?? t.pct;
+      const amt = S.prizeTable[t.pos] || 0;
+      return `<div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:16px;width:24px;text-align:center;">${t.medal}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:110px;">${t.label}</span>
+        <input type="number" id="pr-pct-${t.pos}" value="${pct}" min="0" max="100" step="0.5" style="width:65px;text-align:center;" oninput="calcPrizesFromPct()">
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">%  =</span>
+        <input type="number" id="pr-amt-${t.pos}" value="${amt}" min="0" step="1000" style="width:130px;background:var(--bg4);color:var(--text2);" readonly>
+      </div>`;
+    }).join('')}
+    <div id="pr-pct-warn" style="font-family:var(--mono);font-size:10px;margin-top:4px;"></div>`;
   document.getElementById('cfg-min').value = S.settings.minQty;
   document.getElementById('cfg-max').value = S.settings.maxQty;
   const tCurrent = S.tournaments.find(t => t.id === S.tournamentId);
@@ -1448,10 +1465,40 @@ async function submitInlineOrder(cid, side) {
   toast(`${side === 'BUY' ? 'BID' : 'ASK'} ingresado: ${fmtN(qty)} contrato(s) de ${c ? c.ticker : cid} a ${fmtP(price)}`, 'ok');
   renderAll();
 }
+function calcPrizesFromPct() {
+  const total = parseFloat(document.getElementById('pr-total')?.value) || 0;
+  let sumPct = 0;
+  PRIZE_TIERS.forEach(t => {
+    const pct = parseFloat(document.getElementById(`pr-pct-${t.pos}`)?.value) || 0;
+    sumPct += pct;
+    const amt = Math.round(total * pct / 100);
+    const amtEl = document.getElementById(`pr-amt-${t.pos}`);
+    if (amtEl) amtEl.value = amt;
+  });
+  const warn = document.getElementById('pr-pct-warn');
+  if (warn) {
+    const diff = Math.abs(sumPct - 100);
+    warn.textContent = diff < 0.01 ? '✓ 100%' : `⚠ Suma: ${sumPct.toFixed(1)}% (debe ser 100%)`;
+    warn.style.color = diff < 0.01 ? 'var(--green)' : 'var(--gold)';
+  }
+}
+
 async function savePrizes() {
   const updates = [];
+  // Save percentages to game_settings
+  const pcts = {};
+  PRIZE_TIERS.forEach(t => { pcts[t.pos] = parseFloat(document.getElementById(`pr-pct-${t.pos}`)?.value) || t.pct; });
+  updates.push(db.from('game_settings').upsert(
+    { tournament_id: S.tournamentId, key: 'prize_pcts', value: JSON.stringify(pcts) },
+    { onConflict: 'tournament_id,key' }
+  ));
+  updates.push(db.from('game_settings').upsert(
+    { tournament_id: S.tournamentId, key: 'prize_total', value: String(document.getElementById('pr-total')?.value || 0) },
+    { onConflict: 'tournament_id,key' }
+  ));
+  // Save computed amounts
   for (const t of PRIZE_TIERS) {
-    const v = parseFloat(document.getElementById(`pr-${t.pos}`)?.value || 0);
+    const v = parseFloat(document.getElementById(`pr-amt-${t.pos}`)?.value || 0);
     if (v < 0) { toast('Los premios no pueden ser negativos', 'err'); return; }
     S.prizeTable[t.pos] = v;
     updates.push(db.from('prizes').upsert(
