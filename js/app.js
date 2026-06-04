@@ -822,15 +822,14 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function renderInicio() {
   const total = Object.values(S.prizeTable).reduce((a, b) => a + b, 0);
   document.getElementById('prize-total-lbl').textContent = 'Total: ' + fmtM(total);
-  document.getElementById('prize-visual').innerHTML = PRIZE_TIERS
-    .filter(t => (S.prizeTable[t.pos] || 0) > 0)
-    .map((t, i) =>
-      `<div class="prize-box ${i === 0 ? 'p1' : ''}">
-        <div class="medal">${t.medal}</div>
-        <div class="pos">${t.label}</div>
-        <div class="amt">${fmtM(S.prizeTable[t.pos])}</div>
-      </div>`
-    ).join('');
+  document.getElementById('prize-visual').innerHTML = PRIZE_TIERS.map((t, i) => {
+    const amt = S.prizeTable[t.pos] || 0;
+    return `<div class="prize-box ${i === 0 ? 'p1' : ''}">
+      <div class="medal">${t.medal}</div>
+      <div class="pos">${t.label}</div>
+      <div class="amt">${amt > 0 ? fmtM(amt) : '<span style="color:var(--text3)">—</span>'}</div>
+    </div>`;
+  }).join('');
   document.getElementById('inicio-tbody').innerHTML = S.countries.map(c => {
     const ap = S.auctionPrices[c.id] || 0;
     const lt = getLastTrade(c.id);
