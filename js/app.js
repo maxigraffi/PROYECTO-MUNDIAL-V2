@@ -374,6 +374,26 @@ function setupRealtime() {
 }
 
 /* ═══════════════════════════════
+   PRIZE TIERS
+═══════════════════════════════ */
+const PRIZE_TIERS = [
+  { pos: 1, label: 'Campeón',      medal: '🥇', range: [1,1]   },
+  { pos: 2, label: 'Subcampeón',   medal: '🥈', range: [2,2]   },
+  { pos: 3, label: '3er Puesto',   medal: '🥉', range: [3,3]   },
+  { pos: 4, label: '4° Puesto',    medal: '4️⃣', range: [4,4]   },
+  { pos: 5, label: 'Puestos 5-8',  medal: '🏅', range: [5,8]   },
+  { pos: 9, label: 'Puestos 9-16', medal: '🎖️', range: [9,16]  },
+];
+
+function getPrizeForPosition(pos) {
+  if (pos == null) return 0;
+  for (const tier of PRIZE_TIERS) {
+    if (pos >= tier.range[0] && pos <= tier.range[1]) return S.prizeTable[tier.pos] || 0;
+  }
+  return 0;
+}
+
+/* ═══════════════════════════════
    PRICING HELPERS
 ═══════════════════════════════ */
 function maxPrice() {
@@ -737,7 +757,7 @@ function computeLiquidation() {
   S.trades.filter(t => !t.annulled).forEach(t => {
     const country = S.countries.find(c => c.id === t.countryId);
     if (!country || !country.finalPos) return;
-    const prizePerCtto = (S.prizeTable[country.finalPos] || 0) / 1000;
+    const prizePerCtto = getPrizeForPosition(country.finalPos) / 1000;
     const diff = (prizePerCtto - t.price) * t.qty;
     if (diff > 0)       addFlow(flows, t.sellUserId, t.buyUserId, diff);
     else if (diff < 0)  addFlow(flows, t.buyUserId, t.sellUserId, -diff);
@@ -758,7 +778,7 @@ function getUserNetResult(userId) {
   S.trades.filter(t => !t.annulled).forEach(t => {
     const c = S.countries.find(x => x.id === t.countryId);
     if (!c || !c.finalPos) return;
-    const prizePerCtto = (S.prizeTable[c.finalPos] || 0) / 1000;
+    const prizePerCtto = getPrizeForPosition(c.finalPos) / 1000;
     const diff = (prizePerCtto - t.price) * t.qty;
     if (t.buyUserId  === userId) total += diff;
     if (t.sellUserId === userId) total -= diff;
@@ -796,18 +816,17 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'
    RENDER — INICIO
 ═══════════════════════════════ */
 function renderInicio() {
-  const medals    = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
-  const positions = ['Campeón','Subcampeón','3er Puesto','4° Puesto','5° Puesto','6° Puesto','7° Puesto','8° Puesto'];
   const total = Object.values(S.prizeTable).reduce((a, b) => a + b, 0);
   document.getElementById('prize-total-lbl').textContent = 'Total: ' + fmtM(total);
-  const prizedPositions = Object.keys(S.prizeTable).map(Number).filter(p => S.prizeTable[p] > 0).sort((a, b) => a - b);
-  document.getElementById('prize-visual').innerHTML = prizedPositions.map((pos, i) =>
-    `<div class="prize-box ${i === 0 ? 'p1' : ''}">
-      <div class="medal">${medals[i] || pos}</div>
-      <div class="pos">${positions[i] || 'Puesto ' + pos}</div>
-      <div class="amt">${fmtM(S.prizeTable[pos])}</div>
-    </div>`
-  ).join('');
+  document.getElementById('prize-visual').innerHTML = PRIZE_TIERS
+    .filter(t => (S.prizeTable[t.pos] || 0) > 0)
+    .map((t, i) =>
+      `<div class="prize-box ${i === 0 ? 'p1' : ''}">
+        <div class="medal">${t.medal}</div>
+        <div class="pos">${t.label}</div>
+        <div class="amt">${fmtM(S.prizeTable[t.pos])}</div>
+      </div>`
+    ).join('');
   document.getElementById('inicio-tbody').innerHTML = S.countries.map(c => {
     const ap = S.auctionPrices[c.id] || 0;
     const lt = getLastTrade(c.id);
@@ -1051,7 +1070,7 @@ function renderMyPos() {
     if (pos.bought === 0 && pos.soldContracts === 0) return null;
     let estResult = '—';
     if (S.gameState === 'closed' && c.finalPos) {
-      const prizePerCtto = (S.prizeTable[c.finalPos] || 0) / 1000;
+      const prizePerCtto = getPrizeForPosition(c.finalPos) / 1000;
       const r = pos.bought * (prizePerCtto - pos.avgBuy) + pos.soldContracts * (pos.avgSell - prizePerCtto);
       estResult = `<span class="${cls(r)}">${r >= 0 ? '+' : ''} ${fmtM(r)}</span>`;
     } else if (S.gameState === 'open') {
@@ -1185,13 +1204,11 @@ function renderMyPos() {
    RENDER — ADMIN
 ═══════════════════════════════ */
 function renderAdmin() {
-  const medals = ['🥇','🥈','🥉','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣'];
-  const n = S.countries.length;
-  document.getElementById('prize-inputs').innerHTML = Array.from({ length: n }).map((_, i) =>
+  document.getElementById('prize-inputs').innerHTML = PRIZE_TIERS.map(t =>
     `<div style="display:flex;align-items:center;gap:8px;">
-      <span style="font-size:16px;width:24px;text-align:center;">${medals[i] || i + 1}</span>
-      <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:80px;">Puesto ${i + 1}</span>
-      <input type="number" id="pr-${i+1}" value="${S.prizeTable[i + 1] || 0}" min="0" step="1000" style="width:120px;">
+      <span style="font-size:16px;width:24px;text-align:center;">${t.medal}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:110px;">${t.label}</span>
+      <input type="number" id="pr-${t.pos}" value="${S.prizeTable[t.pos] || 0}" min="0" step="1000" style="width:120px;">
     </div>`
   ).join('');
   document.getElementById('cfg-min').value = S.settings.minQty;
@@ -1432,14 +1449,13 @@ async function submitInlineOrder(cid, side) {
   renderAll();
 }
 async function savePrizes() {
-  const n = S.countries.length;
   const updates = [];
-  for (let i = 1; i <= n; i++) {
-    const v = parseFloat(document.getElementById(`pr-${i}`)?.value || 0);
+  for (const t of PRIZE_TIERS) {
+    const v = parseFloat(document.getElementById(`pr-${t.pos}`)?.value || 0);
     if (v < 0) { toast('Los premios no pueden ser negativos', 'err'); return; }
-    S.prizeTable[i] = v;
+    S.prizeTable[t.pos] = v;
     updates.push(db.from('prizes').upsert(
-      { tournament_id: S.tournamentId, position: i, amount: v },
+      { tournament_id: S.tournamentId, position: t.pos, amount: v },
       { onConflict: 'tournament_id,position' }
     ));
   }
