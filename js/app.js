@@ -177,7 +177,7 @@ async function joinAndEnterTournament(tid, name, status, adminId) {
   showLoading('Uniéndose al torneo...');
   const { count } = await db.from('tournament_players')
     .select('id', { count: 'exact', head: true }).eq('tournament_id', tid);
-  if (count >= 8) { hideLoading(); toast('El torneo ya tiene 8 jugadores.', 'err'); return; }
+  if (count >= 50) { hideLoading(); toast('El torneo ya tiene 50 jugadores (límite máximo).', 'err'); return; }
 
   const { error } = await db.from('tournament_players')
     .insert({ tournament_id: tid, player_id: S.currentUser });
@@ -1255,11 +1255,13 @@ function renderAdmin() {
     const tradesCount = S.trades.filter(t => !t.annulled && (t.buyUserId === u.id || t.sellUserId === u.id)).length;
     const ordersCount = S.orders.filter(o => o.userId === u.id && o.status === 'live').length;
     const net = S.countries.reduce((s, c) => s + getUserPosition(u.id, c.id).net, 0);
+    const canRemove = u.id !== S.currentUser;
     return `<tr class="hover-row">
       <td class="L" style="font-family:var(--mono);">${u.id}</td>
       <td class="L">${u.name}</td>
       <td>${tradesCount}</td><td>${ordersCount}</td>
       <td class="${cls(net)}">${net > 0 ? '+' : ''}${fmtN(net)}</td>
+      <td>${canRemove ? `<button class="btn btn-xs btn-outline" style="color:var(--red);border-color:var(--red);" onclick="adminRemovePlayer('${u.id}')">Eliminar</button>` : ''}</td>
     </tr>`;
   }).join('');
   const liveOrds = S.orders.filter(o => o.status === 'live' && o.remQty > 0);
@@ -1412,6 +1414,15 @@ function closeModal() { document.getElementById('order-modal').classList.remove(
 /* ═══════════════════════════════
    ADMIN ACTIONS
 ═══════════════════════════════ */
+async function adminRemovePlayer(playerId) {
+  if (!confirm(`¿Eliminar al jugador ${playerId} del torneo?`)) return;
+  const { error } = await db.from('tournament_players')
+    .delete().eq('tournament_id', S.tournamentId).eq('player_id', playerId);
+  if (error) { toast('Error: ' + error.message, 'err'); return; }
+  S.users = S.users.filter(u => u.id !== playerId);
+  toast(`Jugador ${playerId} eliminado del torneo`, 'ok');
+  renderAdmin();
+}
 async function adminCancelOrder(id) {
   if (!confirm('¿Cancelar esta orden?')) return;
   await cancelOrder(id);
