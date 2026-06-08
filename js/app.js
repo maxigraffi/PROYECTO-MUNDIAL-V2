@@ -363,6 +363,9 @@ function startPolling() {
   stopPolling();
   _pollTimer = setInterval(async () => {
     if (!S.tournamentId) return;
+    // Si el usuario está tipeando en un input, saltear este ciclo
+    const active = document.activeElement;
+    if (active && ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName)) return;
     await refreshOrdersAndTrades();
     renderAll();
     renderTicker();
