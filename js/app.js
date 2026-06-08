@@ -422,6 +422,28 @@ function getVolume(cid) {
 /* ═══════════════════════════════
    ORDER BOOK & MATCHING ENGINE
 ═══════════════════════════════ */
+async function refreshOrdersAndTrades() {
+  const tid = S.tournamentId;
+  const [{ data: orders }, { data: trades }] = await Promise.all([
+    db.from('orders').select('*').eq('tournament_id', tid).order('created_at'),
+    db.from('trades').select('*').eq('tournament_id', tid).order('created_at'),
+  ]);
+  S.orders = (orders || []).map(o => ({
+    id: o.id, ts: new Date(o.created_at),
+    userId: o.player_id, countryId: o.team_id,
+    side: o.side, price: parseFloat(o.price),
+    origQty: o.orig_qty, remQty: o.rem_qty, status: o.status,
+    marketType: o.market_type || 'team',
+  }));
+  S.trades = (trades || []).map(t => ({
+    id: t.id, ts: new Date(t.created_at),
+    buyOrderId: t.buy_order_id, sellOrderId: t.sell_order_id,
+    buyUserId: t.buyer_id, sellUserId: t.seller_id,
+    countryId: t.team_id, marketType: t.market_type || 'team',
+    qty: t.qty, price: parseFloat(t.price), annulled: t.annulled || false,
+  }));
+}
+
 async function placeOrder(userId, cid, side, price, qty) {
   const mp = maxPrice();
   if (price > mp) return { ok: false, msg: `Precio máximo permitido: ${fmtP(mp)}` };
@@ -444,15 +466,11 @@ async function placeOrder(userId, cid, side, price, qty) {
 
   if (error) return { ok: false, msg: error.message };
 
-  const order = {
-    id: newOrder.id, ts: new Date(newOrder.created_at),
-    userId, countryId: cid, side,
-    price: parseFloat(price), origQty: qty, remQty: qty, status: 'live',
-  };
-  S.orders.push(order);
+  // Refrescar estado desde DB antes de matchear para evitar race conditions
+  await refreshOrdersAndTrades();
 
   await matchOrders(cid);
-  return { ok: true, order };
+  return { ok: true };
 }
 
 async function matchOrders(cid) {
@@ -530,14 +548,12 @@ async function placePropOrder(marketType, side, price, qty) {
     price: parseFloat(price), orig_qty: qty, rem_qty: qty,
   }).select().single();
   if (error) return { ok: false, msg: error.message };
-  const order = {
-    id: newOrder.id, ts: new Date(newOrder.created_at),
-    userId: S.currentUser, countryId: null, marketType, side,
-    price: parseFloat(price), origQty: qty, remQty: qty, status: 'live',
-  };
-  S.orders.push(order);
+
+  // Refrescar estado desde DB antes de matchear para evitar race conditions
+  await refreshOrdersAndTrades();
+
   await matchPropOrders(marketType);
-  return { ok: true, order };
+  return { ok: true };
 }
 
 async function matchPropOrders(marketType) {
