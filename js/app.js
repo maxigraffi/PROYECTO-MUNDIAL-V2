@@ -401,7 +401,7 @@ function getPrizeForPosition(pos) {
    PRICING HELPERS
 ═══════════════════════════════ */
 function maxPrice() {
-  return (S.prizeTable[1] || 0) / 1000;
+  return (S.prizeTable[1] || 0);
 }
 function getBestBid(cid) {
   const bids = S.orders.filter(o => o.countryId === cid && o.side === 'BUY' && o.status === 'live' && o.remQty > 0);
@@ -761,7 +761,7 @@ function computeLiquidation() {
   S.trades.filter(t => !t.annulled).forEach(t => {
     const country = S.countries.find(c => c.id === t.countryId);
     if (!country || !country.finalPos) return;
-    const prizePerCtto = getPrizeForPosition(country.finalPos) / 1000;
+    const prizePerCtto = getPrizeForPosition(country.finalPos);
     const diff = (prizePerCtto - t.price) * t.qty;
     if (diff > 0)       addFlow(flows, t.sellUserId, t.buyUserId, diff);
     else if (diff < 0)  addFlow(flows, t.buyUserId, t.sellUserId, -diff);
@@ -782,7 +782,7 @@ function getUserNetResult(userId) {
   S.trades.filter(t => !t.annulled).forEach(t => {
     const c = S.countries.find(x => x.id === t.countryId);
     if (!c || !c.finalPos) return;
-    const prizePerCtto = getPrizeForPosition(c.finalPos) / 1000;
+    const prizePerCtto = getPrizeForPosition(c.finalPos);
     const diff = (prizePerCtto - t.price) * t.qty;
     if (t.buyUserId  === userId) total += diff;
     if (t.sellUserId === userId) total -= diff;
@@ -1074,7 +1074,7 @@ function renderMyPos() {
     if (pos.bought === 0 && pos.soldContracts === 0) return null;
     let estResult = '—';
     if (S.gameState === 'closed' && c.finalPos) {
-      const prizePerCtto = getPrizeForPosition(c.finalPos) / 1000;
+      const prizePerCtto = getPrizeForPosition(c.finalPos);
       const r = pos.bought * (prizePerCtto - pos.avgBuy) + pos.soldContracts * (pos.avgSell - prizePerCtto);
       estResult = `<span class="${cls(r)}">${r >= 0 ? '+' : ''} ${fmtM(r)}</span>`;
     } else if (S.gameState === 'open') {
@@ -1214,7 +1214,7 @@ function renderAdmin() {
   document.getElementById('prize-inputs').innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:4px;">
       <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:140px;">💰 Total del pozo</span>
-      <input type="number" id="pr-total" value="${savedTotal}" min="0" step="1000" style="width:140px;" oninput="calcPrizesFromPct()" placeholder="Ej: 1000000">
+      <input type="number" id="pr-total" value="${savedTotal}" min="0" step="1" style="width:140px;" oninput="calcPrizesFromPct()" placeholder="Ej: 1000 (miles $)">
     </div>
     ${PRIZE_TIERS.map(t => {
       const pct = savedPcts[t.pos] ?? t.pct;
@@ -1224,7 +1224,7 @@ function renderAdmin() {
         <span style="font-family:var(--mono);font-size:11px;color:var(--text2);width:110px;">${t.label}</span>
         <input type="number" id="pr-pct-${t.pos}" value="${pct}" min="0" max="100" step="0.25" style="width:65px;text-align:center;" oninput="calcPrizesFromPct()">
         <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">${t.perTeam ? '% c/u =' : '%     ='}</span>
-        <input type="number" id="pr-amt-${t.pos}" value="${amt}" min="0" step="1000" style="width:130px;background:var(--bg4);color:var(--text2);" readonly>
+        <input type="number" id="pr-amt-${t.pos}" value="${amt}" min="0" step="0.01" style="width:130px;background:var(--bg4);color:var(--text2);" readonly>
       </div>`;
     }).join('')}
     <div id="pr-pct-warn" style="font-family:var(--mono);font-size:10px;margin-top:4px;"></div>`;
