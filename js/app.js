@@ -356,6 +356,17 @@ async function loadState() {
 let reloadTimer = null;
 let _realtimeChannel = null;
 
+// Refresh liviano: solo órdenes y trades (para actualizaciones de precios en vivo)
+function schedulePriceRefresh() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(async () => {
+    await refreshOrdersAndTrades();
+    renderAll();
+    renderTicker();
+  }, 150);
+}
+
+// Reload completo: para cambios de configuración, equipos, premios
 function scheduleReload() {
   clearTimeout(reloadTimer);
   reloadTimer = setTimeout(async () => {
@@ -368,12 +379,12 @@ function setupRealtime() {
   if (_realtimeChannel) db.removeChannel(_realtimeChannel);
   const tid = S.tournamentId;
   _realtimeChannel = db.channel('otc-' + tid)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders',       filter: `tournament_id=eq.${tid}` }, scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'trades',       filter: `tournament_id=eq.${tid}` }, scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'game_settings',filter: `tournament_id=eq.${tid}` }, scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'teams',        filter: `tournament_id=eq.${tid}` }, scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes',       filter: `tournament_id=eq.${tid}` }, scheduleReload)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_players', filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders',            filter: `tournament_id=eq.${tid}` }, schedulePriceRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'trades',            filter: `tournament_id=eq.${tid}` }, schedulePriceRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'game_settings',     filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'teams',             filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'prizes',            filter: `tournament_id=eq.${tid}` }, scheduleReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament_players',filter: `tournament_id=eq.${tid}` }, scheduleReload)
     .subscribe();
 }
 
