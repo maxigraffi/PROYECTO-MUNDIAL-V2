@@ -196,6 +196,7 @@ async function enterTournament(tid, name, status, adminId) {
 
   await loadState();
   setupRealtime();
+  startPolling();
   hideLobby();
   hideLoading();
 
@@ -210,6 +211,7 @@ async function enterTournament(tid, name, status, adminId) {
 }
 
 function goToLobby() {
+  stopPolling();
   if (_realtimeChannel) {
     db.removeChannel(_realtimeChannel);
     _realtimeChannel = null;
@@ -355,6 +357,21 @@ async function loadState() {
 ═══════════════════════════════ */
 let reloadTimer = null;
 let _realtimeChannel = null;
+let _pollTimer = null;
+
+function startPolling() {
+  stopPolling();
+  _pollTimer = setInterval(async () => {
+    if (!S.tournamentId) return;
+    await refreshOrdersAndTrades();
+    renderAll();
+    renderTicker();
+  }, 3000);
+}
+
+function stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+}
 
 // Refresh liviano: solo órdenes y trades (para actualizaciones de precios en vivo)
 function schedulePriceRefresh() {
@@ -1787,6 +1804,7 @@ function _setCurrentPlayer(player) {
 
 async function handleLogout() {
   if (!confirm('¿Cerrar sesión?')) return;
+  stopPolling();
   if (_realtimeChannel) {
     db.removeChannel(_realtimeChannel);
     _realtimeChannel = null;
