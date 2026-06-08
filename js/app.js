@@ -722,11 +722,11 @@ function renderProps() {
       <div class="prop-book-grid">
         <div class="prop-book-col">
           <div class="prop-book-hd up">Compras</div>
-          ${bids.slice(0,6).map(o => `<div class="prop-book-row">${o.userId === u ? `<button class="btn-cancel-inline" onclick="cancelOrder('${o.id}')">✕</button>` : '<span class="prop-book-spacer"></span>'}<span class="up">${fmtP(o.price)}</span><span class="muted">${o.remQty}</span></div>`).join('') || '<div class="prop-book-empty">—</div>'}
+          ${bids.slice(0,6).map(o => { const mine = o.userId === u; return `<div class="prop-book-row${mine ? ' prop-book-mine' : ''}">${mine ? `<button class="btn-cancel-inline" onclick="cancelOrder('${o.id}')">✕</button>` : '<span class="prop-book-spacer"></span>'}<span class="up">${fmtP(o.price)}</span><span class="muted">${o.remQty}</span>${mine ? '<span class="prop-mine-badge">★</span>' : ''}</div>`; }).join('') || '<div class="prop-book-empty">—</div>'}
         </div>
         <div class="prop-book-col">
           <div class="prop-book-hd dn">Ventas</div>
-          ${asks.slice(0,6).map(o => `<div class="prop-book-row">${o.userId === u ? `<button class="btn-cancel-inline" onclick="cancelOrder('${o.id}')">✕</button>` : '<span class="prop-book-spacer"></span>'}<span class="dn">${fmtP(o.price)}</span><span class="muted">${o.remQty}</span></div>`).join('') || '<div class="prop-book-empty">—</div>'}
+          ${asks.slice(0,6).map(o => { const mine = o.userId === u; return `<div class="prop-book-row${mine ? ' prop-book-mine' : ''}">${mine ? `<button class="btn-cancel-inline" onclick="cancelOrder('${o.id}')">✕</button>` : '<span class="prop-book-spacer"></span>'}<span class="dn">${fmtP(o.price)}</span><span class="muted">${o.remQty}</span>${mine ? '<span class="prop-mine-badge">★</span>' : ''}</div>`; }).join('') || '<div class="prop-book-empty">—</div>'}
         </div>
       </div>
     </div>`;
