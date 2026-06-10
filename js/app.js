@@ -456,8 +456,8 @@ function getVolume(cid) {
 async function refreshOrdersAndTrades() {
   const tid = S.tournamentId;
   const [{ data: orders }, { data: trades }] = await Promise.all([
-    db.from('orders').select('*').eq('tournament_id', tid).order('created_at'),
-    db.from('trades').select('*').eq('tournament_id', tid).order('created_at'),
+    db.from('orders').select('*').eq('tournament_id', tid).eq('status', 'live').order('created_at'),
+    db.from('trades').select('*').eq('tournament_id', tid).order('created_at').limit(5000),
   ]);
   S.orders = (orders || []).map(o => ({
     id: o.id, ts: new Date(o.created_at),
