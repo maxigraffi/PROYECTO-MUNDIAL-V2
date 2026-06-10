@@ -500,8 +500,10 @@ async function placeOrder(userId, cid, side, price, qty) {
   // Refrescar estado desde DB antes de matchear para evitar race conditions
   await refreshOrdersAndTrades();
 
+  const tradesBefore = S.trades.length;
   await matchOrders(cid);
-  return { ok: true };
+  const tradesExecuted = S.trades.length - tradesBefore;
+  return { ok: true, tradesExecuted };
 }
 
 async function matchOrders(cid) {
@@ -583,8 +585,10 @@ async function placePropOrder(marketType, side, price, qty) {
   // Refrescar estado desde DB antes de matchear para evitar race conditions
   await refreshOrdersAndTrades();
 
+  const tradesBefore = S.trades.length;
   await matchPropOrders(marketType);
-  return { ok: true };
+  const tradesExecuted = S.trades.length - tradesBefore;
+  return { ok: true, tradesExecuted };
 }
 
 async function matchPropOrders(marketType) {
@@ -635,7 +639,11 @@ async function submitPropOrder(marketType, side) {
   if (isNaN(qty) || qty < 1) { toast('Ingresá una cantidad válida', 'err'); return; }
   const r = await placePropOrder(marketType, side, price, qty);
   if (!r.ok) { toast(r.msg, 'err'); return; }
-  toast(`Orden ${side === 'BUY' ? 'de compra' : 'de venta'} colocada`, 'ok');
+  if (r.tradesExecuted > 0) {
+    toast(`⚡ ¡Operación ejecutada! ${side === 'BUY' ? 'Compra' : 'Venta'} @ ${fmtP(price)}`, 'ok');
+  } else {
+    toast(`${side === 'BUY' ? 'BID' : 'ASK'} ingresado al book @ ${fmtP(price)}`, 'ok');
+  }
   renderProps();
 }
 
@@ -893,9 +901,12 @@ function renderInicio() {
    RENDER — MARKET
 ═══════════════════════════════ */
 function renderMarket() {
-  // Remember which groups are open before re-rendering
+  // Remember which groups and country panels are open before re-rendering
   const openGroups = new Set(
     [...document.querySelectorAll('.market-group-body.open')].map(el => el.id.replace('mg-', ''))
+  );
+  const openPanels = new Set(
+    [...document.querySelectorAll('.cp-body.open')].map(el => el.id.replace('cp-', ''))
   );
   const q  = document.getElementById('mkt-search').value.toLowerCase();
   const mp = maxPrice();
@@ -1014,6 +1025,11 @@ function renderMarket() {
       const chevron = body.previousElementSibling?.querySelector('.mg-chevron');
       if (chevron) chevron.textContent = '▴';
     }
+  });
+  // Restore open country panels
+  openPanels.forEach(cid => {
+    const el = document.getElementById('cp-' + cid);
+    if (el) el.classList.add('open');
   });
 }
 function togglePanel(cid) {
@@ -1520,7 +1536,11 @@ async function submitInlineOrder(cid, side) {
   if (!r.ok) { toast(r.msg, 'err'); return; }
   priceEl.value = '';
   const c = S.countries.find(x => x.id === cid);
-  toast(`${side === 'BUY' ? 'BID' : 'ASK'} ingresado: ${fmtN(qty)} contrato(s) de ${c ? c.ticker : cid} a ${fmtP(price)}`, 'ok');
+  if (r.tradesExecuted > 0) {
+    toast(`⚡ ¡Operación ejecutada! ${fmtN(qty)} contrato(s) de ${c ? c.ticker : cid} a ${fmtP(price)}`, 'ok');
+  } else {
+    toast(`${side === 'BUY' ? 'BID' : 'ASK'} ingresado al book: ${fmtN(qty)} × ${c ? c.ticker : cid} @ ${fmtP(price)}`, 'ok');
+  }
   renderAll();
 }
 function calcPrizesFromPct() {
