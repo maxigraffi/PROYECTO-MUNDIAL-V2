@@ -1970,8 +1970,12 @@ function downloadTradesCSV(type) {
     if (q)   tr = tr.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return (c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q))) || t.buyUserId.toLowerCase().includes(q) || t.sellUserId.toLowerCase().includes(q); });
     headers  = ['Hora','Equipo','Ticker','Comprador','Vendedor','Cantidad','Precio (miles $)','Nocional Total','Estado'];
     rows     = tr.map(t => {
+      const isProp = t.marketType && t.marketType !== 'team';
       const c = S.countries.find(x => x.id === t.countryId) || {};
-      return [fmtTS(t.ts), c.name || t.countryId, c.ticker || t.countryId, t.buyUserId, t.sellUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
+      const m = isProp ? PROP_MARKETS.find(m => m.key === t.marketType) : null;
+      const nombre = isProp ? (m ? m.label : t.marketType) : (c.name || t.countryId);
+      const ticker = isProp ? (m ? m.key : t.marketType) : (c.ticker || t.countryId);
+      return [fmtTS(t.ts), nombre, ticker, t.buyUserId, t.sellUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
     });
     filename = `${S.tournamentName.replace(/\s+/g,'_')}_todos_los_trades.csv`;
   } else {
@@ -1981,9 +1985,13 @@ function downloadTradesCSV(type) {
     if (q)    mine = mine.filter(t => { const c = S.countries.find(x => x.id === t.countryId); return c && (c.name.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)); });
     headers  = ['Hora','Equipo','Ticker','Lado','Contraparte','Cantidad','Precio (miles $)','Nocional','Estado'];
     rows     = mine.map(t => {
+      const isProp = t.marketType && t.marketType !== 'team';
       const c = S.countries.find(x => x.id === t.countryId) || {};
+      const m = isProp ? PROP_MARKETS.find(m => m.key === t.marketType) : null;
+      const nombre = isProp ? (m ? m.label : t.marketType) : (c.name || t.countryId);
+      const ticker = isProp ? (m ? m.key : t.marketType) : (c.ticker || t.countryId);
       const isBuy = t.buyUserId === u;
-      return [fmtTS(t.ts), c.name || t.countryId, c.ticker || t.countryId, isBuy ? 'COMPRE' : 'VENDI', isBuy ? t.sellUserId : t.buyUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
+      return [fmtTS(t.ts), nombre, ticker, isBuy ? 'COMPRE' : 'VENDI', isBuy ? t.sellUserId : t.buyUserId, t.qty, t.price, (t.qty * t.price * 1000).toFixed(0), t.annulled ? 'ANULADO' : 'EJECUTADO'];
     });
     filename = `${S.tournamentName.replace(/\s+/g,'_')}_mis_operaciones.csv`;
   }
